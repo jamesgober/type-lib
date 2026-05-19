@@ -1,0 +1,58 @@
+﻿[package]
+name = "type-lib"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.75"
+readme = "README.md"
+license = "Apache-2.0 OR MIT"
+
+authors = [
+    "James Gober <me@jamesgober.com>"
+]
+
+description = "Validation and type constraint library. Declare domain types with invariants enforced at construction. Parse-dont-validate pattern as a first-class citizen. Zero-overhead wrappers with derive macros."
+
+keywords = [
+    "types",
+    "validation",
+    "newtype",
+    "parse",
+    "rust"
+]
+
+categories = [
+    "data-structures",
+    "rust-patterns"
+]
+
+documentation = "https://docs.rs/type-lib"
+repository    = "https://github.com/jamesgober/type-lib"
+homepage      = "https://github.com/jamesgober/type-lib"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
+[lib]
+name = "type_lib"
+path = "src/lib.rs"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+
+[dev-dependencies]
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = true
