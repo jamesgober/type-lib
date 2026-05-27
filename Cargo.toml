@@ -1,6 +1,6 @@
 ﻿[package]
 name = "type-lib"
-version = "0.2.0"
+version = "0.5.0"
 edition = "2021"
 rust-version = "1.75"
 readme = "README.md"
@@ -39,11 +39,30 @@ path = "src/lib.rs"
 
 [features]
 default = ["std"]
-std = []
+# `std` pulls in `alloc` and adds the `std::error::Error` impl for `ValidationError`.
+std = ["alloc"]
+# `alloc` enables the length rules for owned `String`/`Vec<T>` values. The core
+# `Validator`/`Refined` API and all borrowed-value rules work without it.
+alloc = []
 
 [dependencies]
 
 [dev-dependencies]
+# Property-based tests for rule and combinator invariants.
+proptest = "1"
+# Microbenchmarks for the validation hot path. Default features are disabled to
+# keep the dev-dependency tree (and MSRV surface) small.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+# The committed `Cargo.lock` pins this dev-dependency tree to versions that still
+# build on the MSRV (Rust 1.75): proptest 1.4, criterion's clap 4.5, tempfile 3.14,
+# and half 2.4. Newer releases of these require a newer compiler. These are
+# dev-only and never reach published consumers; re-pin with `cargo update -p <crate>
+# --precise <ver>` if you bump the MSRV.
+
+[[bench]]
+name = "validation"
+harness = false
 
 [profile.release]
 opt-level = 3

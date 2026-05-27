@@ -17,7 +17,7 @@
 
 `type-lib` enforces domain invariants at construction and proves them through the
 type system thereafter — the parse-dont-validate pattern. This document is the
-complete reference for the public API as of `v0.2.0`: every exported item, what
+complete reference for the public API as of `v0.5.0`: every exported item, what
 it does, the meaning of each parameter and return value, the error semantics, and
 runnable examples for each use case.
 
@@ -29,6 +29,11 @@ runnable examples for each use case.
 	- [`Validator`](#validator)
 	- [`Refined`](#refined)
 	- [`ValidationError`](#validationerror)
+	- [Built-in rules](#built-in-rules)
+		- [Length rules](#length-rules)
+		- [Numeric rules](#numeric-rules)
+		- [String rules](#string-rules)
+	- [Combinators](#combinators)
 	- [`prelude`](#prelude)
 	- [`VERSION`](#version)
 - [Patterns](#patterns)
@@ -43,16 +48,21 @@ runnable examples for each use case.
 
 ```toml
 [dependencies]
-type-lib = "0.2.0"
+type-lib = "0.5.0"
 ```
 
 To build without the standard library, disable default features. The core
-`Validator` / `Refined` API is identical; only the `std::error::Error` impl on
-`ValidationError` is gated off.
+`Validator` / `Refined` API and all borrowed-value rules are identical; the
+`alloc` feature adds owned-type (`String` / `Vec`) length rules, and `std` adds
+the `std::error::Error` impl on `ValidationError`.
 
 ```toml
 [dependencies]
-type-lib = { version = "0.2.0", default-features = false }
+# no_std, core API + borrowed-value rules
+type-lib = { version = "0.5.0", default-features = false }
+
+# no_std + owned-type rules
+type-lib = { version = "0.5.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -387,40 +397,200 @@ let err = ValidationError::new("out_of_range", "expected 1..=10, got 42");
 assert_eq!(user_message(&err), "the number is outside the allowed range");
 ```
 
-### `prelude`
+### Built-in rules
 
-Convenience re-exports of the foundation types.
+The `type_lib::rules` module ships ready-made [`Validator`](#validator)
+implementations for the most common invariants. Every built-in rule reports
+failures as [`ValidationError`](#validationerror), so they share one error type
+and compose freely with the [combinators](#combinators).
+
+Rules are marker types: you never construct one, you name it as the `V` parameter
+of a [`Refined`](#refined) or call its associated `validate` directly.
+
+#### Length rules
+
+Length rules operate on any type implementing `type_lib::rules::HasLength`. The
+crate implements it for `str` and `[T]` always, for `String` and `Vec<T>` under
+the `alloc` feature, and for shared references (`&U`) so a rule sees through one
+`&`. For strings, length is the number of `char`s (Unicode scalar values); for
+slices and vectors it is the element count.
+
+| Rule | Accepts when |
+|---|---|
+| `NonEmpty` | length `> 0` |
+| `MinLen<MIN>` | length `>= MIN` |
+| `MaxLen<MAX>` | length `<= MAX` |
+| `LenRange<MIN, MAX>` | `MIN <= length <= MAX` |
+
+Error codes: `"non_empty"`, `"min_len"`, `"max_len"`, `"len_range"`.
 
 ```rust
-pub use type_lib::prelude::*; // Refined, Validator, ValidationError
+use type_lib::rules::{LenRange, MaxLen, NonEmpty};
+use type_lib::Validator;
+
+assert!(NonEmpty::validate("hi").is_ok());
+assert!(NonEmpty::validate("").is_err());
+
+assert!(MaxLen::<5>::validate("hello").is_ok());
+assert!(MaxLen::<5>::validate("too long").is_err());
+
+// Length counts characters, not bytes.
+assert_eq!("héllo".chars().count(), 5);
+assert!(LenRange::<1, 5>::validate("héllo").is_ok());
+```
+
+Length rules also apply to slices:
+
+```rust
+use type_lib::rules::MinLen;
+use type_lib::Validator;
+
+assert!(MinLen::<2>::validate(&[1, 2, 3][..]).is_ok());
+assert!(MinLen::<2>::validate(&[1][..]).is_err());
+```
+
+#### Numeric rules
+
+Sign rules apply to the signed integer and floating-point primitives.
+[`InRange`](#numeric-rules) applies to the integer primitives that fit losslessly
+in an `i64` (`i8`/`i16`/`i32`/`i64`, `u8`/`u16`/`u32`) and takes `i64` const
+bounds.
+
+| Rule | Accepts when |
+|---|---|
+| `Positive` | `value > 0` |
+| `NonNegative` | `value >= 0` |
+| `Negative` | `value < 0` |
+| `NonPositive` | `value <= 0` |
+| `InRange<MIN, MAX>` | `MIN <= value <= MAX` (inclusive) |
+
+Error codes: `"positive"`, `"non_negative"`, `"negative"`, `"non_positive"`,
+`"in_range"`.
+
+```rust
+use type_lib::rules::{InRange, Positive};
+use type_lib::Validator;
+
+assert!(Positive::validate(&3_i32).is_ok());
+assert!(Positive::validate(&0_i32).is_err());
+assert!(Positive::validate(&-1.5_f64).is_err());
+
+// A percentage.
+assert!(InRange::<0, 100>::validate(&50_u8).is_ok());
+assert!(InRange::<0, 100>::validate(&150_i32).is_err());
+
+// Ranges may be negative.
+assert!(InRange::<-10, 10>::validate(&-5_i16).is_ok());
+```
+
+#### String rules
+
+String rules apply to any `S: AsRef<str>` (so `&str`, `String`, and borrowed
+string types). They check character content only; combine with a length rule via
+[`And`](#combinators) when you also need a length bound.
+
+| Rule | Accepts when |
+|---|---|
+| `Ascii` | every character is ASCII |
+| `Alphanumeric` | every character is alphanumeric (Unicode) |
+| `Trimmed` | no leading or trailing whitespace |
+
+Error codes: `"ascii"`, `"alphanumeric"`, `"trimmed"`. An empty string passes
+`Ascii` and `Alphanumeric` vacuously.
+
+```rust
+use type_lib::rules::{Alphanumeric, Ascii, Trimmed};
+use type_lib::Validator;
+
+assert!(Ascii::validate("plain-text_123").is_ok());
+assert!(Ascii::validate("café").is_err());
+
+assert!(Alphanumeric::validate("abc123").is_ok());
+assert!(Alphanumeric::validate("user_name").is_err()); // underscore
+
+assert!(Trimmed::validate("clean").is_ok());
+assert!(Trimmed::validate(" padded ").is_err());
+```
+
+### Combinators
+
+The `type_lib::combinator` module composes [`Validator`](#validator)s at the type
+level. Each combinator is itself a `Validator`, so they nest:
+`And<A, Or<B, C>>` is a valid rule.
+
+| Combinator | Passes when | Error type |
+|---|---|---|
+| `And<A, B>` | both `A` and `B` pass (`A` checked first) | shared `A::Error` |
+| `Or<A, B>` | `A` or `B` passes (`A` checked first) | shared `A::Error` |
+| `Not<A>` | `A` fails | [`ValidationError`](#validationerror) (code `"not"`) |
+
+`And` and `Or` require their two sub-rules to share one [`Validator::Error`] type
+— which every built-in rule satisfies (all report `ValidationError`). When both
+sides of an `Or` fail, the error returned is the second rule's. `Not` accepts any
+sub-rule regardless of its error type.
+
+```rust
+use type_lib::combinator::{And, Not, Or};
+use type_lib::rules::{Alphanumeric, Ascii, MaxLen, NonEmpty};
+use type_lib::Validator;
+
+// Both must hold.
+type ShortNonEmpty = And<NonEmpty, MaxLen<8>>;
+assert!(ShortNonEmpty::validate("ok").is_ok());
+assert!(ShortNonEmpty::validate("").is_err());
+assert!(ShortNonEmpty::validate("way too long").is_err());
+
+// Either may hold.
+type AlnumOrAscii = Or<Alphanumeric, Ascii>;
+assert!(AlnumOrAscii::validate("abc123").is_ok());
+
+// Inversion: require a value that is *not* pure ASCII.
+type NonAscii = Not<Ascii>;
+assert!(NonAscii::validate("café").is_ok());
+assert!(NonAscii::validate("plain").is_err());
+```
+
+Wrapped in a `Refined`, a composed rule reads as a single domain type:
+
+```rust
+use type_lib::combinator::And;
+use type_lib::rules::{Ascii, LenRange};
+use type_lib::Refined;
+
+// An API key: 16–64 ASCII characters.
+type ApiKey = Refined<String, And<Ascii, LenRange<16, 64>>>;
+
+assert!(ApiKey::new("sk_live_0123456789abcdef".to_owned()).is_ok());
+assert!(ApiKey::new("short".to_owned()).is_err());
+```
+
+### `prelude`
+
+Convenience re-exports of the foundation types and combinators.
+
+```rust
+pub use type_lib::prelude::*; // Refined, Validator, ValidationError, And, Or, Not
 ```
 
 **Description**
 
-- Glob-import to bring [`Refined`](#refined), [`Validator`](#validator), and
-  [`ValidationError`](#validationerror) into scope in one line.
+- Glob-import to bring [`Refined`](#refined), [`Validator`](#validator),
+  [`ValidationError`](#validationerror), and the [combinators](#combinators)
+  [`And`](#combinators) / `Or` / `Not` into scope in one line. The built-in
+  [rules](#built-in-rules) are intentionally left out to keep the namespace
+  small; import the ones you need from `type_lib::rules`.
 
 **Example**
 
 ```rust
-use type_lib::prelude::*;
+use type_lib::prelude::*;          // Refined, Validator, ValidationError, And, Or, Not
+use type_lib::rules::{Ascii, NonEmpty};
 
-struct NonEmpty;
+// `And` comes from the prelude; the rules from `type_lib::rules`.
+type Token<'a> = Refined<&'a str, And<NonEmpty, Ascii>>;
 
-impl<S: AsRef<str> + ?Sized> Validator<S> for NonEmpty {
-    type Error = ValidationError;
-
-    fn validate(value: &S) -> Result<(), Self::Error> {
-        if value.as_ref().is_empty() {
-            Err(ValidationError::new("non_empty", "value must not be empty"))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-let ok: Result<Refined<&str, NonEmpty>, _> = Refined::new("hello");
-assert!(ok.is_ok());
+assert!(Token::new("abc123").is_ok());
+assert!(Token::new("").is_err());
 ```
 
 ### `VERSION`
@@ -572,20 +742,31 @@ assert_eq!(*bumped, 6);
 
 ### `std` (default)
 
-- Enabled by default.
+- Enabled by default; implies `alloc`.
 - Provides the [`std::error::Error`] implementation for
   [`ValidationError`](#validationerror).
-- When disabled (`default-features = false`), the crate builds in `no_std` mode.
-  The `Validator` / `Refined` / `ValidationError` API is unchanged; only the
-  `std::error::Error` impl is removed.
+
+### `alloc`
+
+- Enables the length rules ([`NonEmpty`](#length-rules), `MinLen`, `MaxLen`,
+  `LenRange`) for owned `String` and `Vec<T>` values, via `HasLength` impls.
+- Implied by `std`. Enable it alone for `no_std` targets that have an allocator.
+
+With no features (`default-features = false`), the crate is `no_std`: the
+`Validator` / `Refined` / `ValidationError` API and every borrowed-value rule
+(`&str`, `[T]`, numeric, string) are available; only owned-type length rules and
+the `std::error::Error` impl are gated off.
 
 ## Semantics and Compatibility
 
-- `v0.2.0` establishes the public API surface that `1.0` will preserve. The items
-  documented here are the stable foundation.
+- The public API surface established in `v0.2.0` is what `1.0` will preserve;
+  `v0.5.0` adds the [rules](#built-in-rules) and [combinators](#combinators)
+  additively.
 - A `Refined<T, V>` can only be constructed by passing its validator: there is no
   unchecked constructor in the public API, so the invariant holds for every
   safely constructed value.
 - `Refined` is `#[repr(transparent)]` over `T`; its size and alignment match `T`.
-- Built-in rule sets (length, range, pattern, …) and a derive macro are planned
-  for later milestones. They are additive and will not break this surface.
+- Every built-in rule reports [`ValidationError`](#validationerror), so they
+  compose under [`And`](#combinators) / `Or` without error-type juggling.
+- A derive macro for generating validated newtypes is planned for a later
+  milestone. It will be additive and will not break this surface.

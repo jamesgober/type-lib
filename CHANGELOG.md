@@ -27,6 +27,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-05-27
+
+The implementation milestone: built-in rules, composition, property tests, and
+benchmarks. Purely additive over `v0.2.0`.
+
+### Added
+
+- `rules` module of ready-made validators, all reporting `ValidationError`:
+  - length (via the new `HasLength` trait): `NonEmpty`, `MinLen<MIN>`,
+    `MaxLen<MAX>`, `LenRange<MIN, MAX>` — counting `char`s for strings and
+    elements for slices/vectors.
+  - numeric: `Positive`, `NonNegative`, `Negative`, `NonPositive` (signed integer
+    and float primitives), and `InRange<MIN, MAX>` (`i64`-bounded, for the integer
+    types that fit losslessly in `i64`).
+  - string: `Ascii`, `Alphanumeric`, `Trimmed` (any `AsRef<str>`).
+- `combinator` module: `And<A, B>`, `Or<A, B>`, and `Not<A>`, composing rules at
+  the type level. `And`/`Or` share their sub-rules' error type; `Not` reports
+  `ValidationError`.
+- `alloc` Cargo feature, enabling the length rules for owned `String` / `Vec<T>`
+  values. `std` now implies `alloc`.
+- `And`, `Or`, and `Not` re-exported from the `prelude`.
+- `proptest` property tests covering rule/combinator invariants
+  (`tests/proptests.rs`).
+- `criterion` benchmarks for the validation hot path (`benches/validation.rs`).
+- Runnable examples under `examples/`: `quick_start`, `built_in_rules`,
+  `composing_rules`, `custom_rule`.
+
+### Changed
+
+- README and `docs/API.md` expanded to document the rule and combinator sets with
+  examples, and to record the new `alloc` feature.
+- Committed `Cargo.lock` pins the dev-dependency tree (proptest 1.4, criterion's
+  clap 4.5, tempfile 3.14, half 2.4) to versions that build on the MSRV (1.75).
+
+---
+
 ## [0.2.0] - 2026-05-27
 
 The foundation milestone: the public API surface that `1.0` will preserve.
@@ -93,6 +129,7 @@ The foundation milestone: the public API surface that `1.0` will preserve.
   `newline_style = "Unix"`. Linux and macOS were unaffected.
 - Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
-[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/jamesgober/type-lib/compare/v0.2.0...v0.5.0
 [0.2.0]: https://github.com/jamesgober/type-lib/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesgober/type-lib/releases/tag/v0.1.0

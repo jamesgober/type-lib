@@ -23,44 +23,71 @@
 //! message; rules that need structured failures define their own error type via
 //! [`Validator::Error`].
 //!
+//! ## Built-in rules and combinators
+//!
+//! You rarely need to hand-write a rule. The [`rules`] module ships the common
+//! ones — length ([`NonEmpty`](rules::NonEmpty), [`MaxLen`](rules::MaxLen),
+//! [`LenRange`](rules::LenRange), …), numeric ([`Positive`](rules::Positive),
+//! [`InRange`](rules::InRange), …), and string content
+//! ([`Ascii`](rules::Ascii), [`Alphanumeric`](rules::Alphanumeric),
+//! [`Trimmed`](rules::Trimmed)). The [`combinator`] module composes them at the
+//! type level with [`And`](combinator::And), [`Or`](combinator::Or), and
+//! [`Not`](combinator::Not).
+//!
 //! ## Example
+//!
+//! ```rust
+//! use type_lib::combinator::And;
+//! use type_lib::rules::{LenRange, Trimmed};
+//! use type_lib::Refined;
+//!
+//! // A username: 3–16 characters with no surrounding whitespace.
+//! type Username<'a> = Refined<&'a str, And<Trimmed, LenRange<3, 16>>>;
+//!
+//! let user = Username::new("alice");
+//! assert!(user.is_ok());
+//! assert!(Username::new("  x  ").is_err()); // whitespace + too short
+//! ```
+//!
+//! Writing a bespoke rule is just as direct when the built-ins do not fit:
 //!
 //! ```rust
 //! use type_lib::{Refined, ValidationError, Validator};
 //!
-//! // A rule, written once and reused anywhere through the type system.
-//! struct NonEmpty;
+//! struct Even;
 //!
-//! impl<S: AsRef<str> + ?Sized> Validator<S> for NonEmpty {
+//! impl Validator<i64> for Even {
 //!     type Error = ValidationError;
 //!
-//!     fn validate(value: &S) -> Result<(), Self::Error> {
-//!         if value.as_ref().is_empty() {
-//!             Err(ValidationError::new("non_empty", "value must not be empty"))
-//!         } else {
+//!     fn validate(value: &i64) -> Result<(), Self::Error> {
+//!         if value % 2 == 0 {
 //!             Ok(())
+//!         } else {
+//!             Err(ValidationError::new("even", "value must be even"))
 //!         }
 //!     }
 //! }
 //!
-//! // A domain type that structurally cannot be empty.
-//! type Username = Refined<String, NonEmpty>;
-//!
-//! let user = Username::new("alice".to_owned());
-//! assert!(user.is_ok());
-//! assert!(Username::new(String::new()).is_err());
+//! type EvenI64 = Refined<i64, Even>;
+//! assert!(EvenI64::new(4).is_ok());
+//! assert!(EvenI64::new(5).is_err());
 //! ```
 //!
 //! ## Cargo features
 //!
-//! - `std` *(default)* — implements [`std::error::Error`] for [`ValidationError`].
-//!   Disable it (`default-features = false`) to build for `no_std`; the core
-//!   [`Validator`] / [`Refined`] API is identical either way.
+//! - `std` *(default)* — implies `alloc` and implements [`std::error::Error`] for
+//!   [`ValidationError`].
+//! - `alloc` — enables the length rules for owned `String` / `Vec<T>` values.
+//!
+//! With no features (`default-features = false`), the crate is `no_std` and the
+//! core [`Validator`] / [`Refined`] API plus all borrowed-value rules are
+//! available unchanged.
 //!
 //! ## Stability
 //!
-//! `v0.2.0` establishes the public API that 1.0 will preserve. Built-in rule sets
-//! and a derive macro are planned for later milestones and will be additive.
+//! The public API established in `v0.2.0` is the surface 1.0 will preserve;
+//! `v0.5.0` adds the rule and combinator sets additively. A derive macro for
+//! generating validated newtypes is planned for a later milestone.
 //!
 //! # License
 //!
@@ -84,11 +111,16 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(clippy::missing_safety_doc)]
 
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
 mod error;
 mod refined;
 mod validator;
 
+pub mod combinator;
 pub mod prelude;
+pub mod rules;
 
 pub use crate::error::ValidationError;
 pub use crate::refined::Refined;

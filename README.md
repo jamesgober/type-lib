@@ -45,6 +45,12 @@ own error type through `Validator::Error`.
   by the type thereafter; no re-checking at call sites.
 - **Zero-overhead wrappers** — `Refined<T, V>` is `#[repr(transparent)]` over `T`
   and stores nothing extra. The validated type is the same size as the raw one.
+- **Built-in rules** — ready-made validators for length
+  ([`NonEmpty`](docs/API.md#length-rules), `MinLen`, `MaxLen`, `LenRange`), numbers
+  (`Positive`, `InRange`, …), and string content (`Ascii`, `Alphanumeric`,
+  `Trimmed`).
+- **Composition** — combine rules at the type level with
+  [`And`](docs/API.md#combinators), `Or`, and `Not`; the result is itself a rule.
 - **Reusable, type-level rules** — write a `Validator` once and apply it to any
   value type through the type system.
 - **Tamper-proof by construction** — `Refined` exposes no `&mut` to its inner
@@ -52,9 +58,22 @@ own error type through `Validator::Error`.
   invalid one behind the type's back.
 - **Bring your own error** — use the bundled `ValidationError` or any custom
   error type via the `Validator::Error` associated type.
-- **`no_std` friendly** — the core API is identical with or without `std`; the
-  only `std`-gated item is the [`std::error::Error`] impl on `ValidationError`.
+- **`no_std` friendly** — the core API and all borrowed-value rules work without
+  `std`; `alloc` adds owned-type (`String` / `Vec`) length rules and `std` adds
+  the [`std::error::Error`] impl.
 - **Cross-platform** — Linux, macOS, and Windows on stable and MSRV 1.75.
+
+---
+
+## Performance
+
+Validation is the only runtime cost; the wrapper adds none. Local Criterion means
+(Windows x86_64, Rust stable, `cargo bench`):
+
+- `Refined::new` with `Ascii` on a short `&str`: **~0.9 ns**
+- `Refined::new` with `LenRange<3, 16>` on a `&str`: **~2.2 ns**
+- `Refined::new` with `InRange<0, 100>` on an `i32`: **~2.6 ns**
+- `get` / `Deref` accessors: **sub-nanosecond** (compile down to a field read)
 
 ---
 
@@ -65,8 +84,13 @@ For the complete reference with examples, see [docs/API.md](docs/API.md).
 - [`Validator`](docs/API.md#validator) — reusable, type-level validation rule
 - [`Refined`](docs/API.md#refined) — zero-cost wrapper around a validated value
 - [`ValidationError`](docs/API.md#validationerror) — ready-made `no_std` error
+- [Built-in rules](docs/API.md#built-in-rules) — length, numeric, and string rules
+- [Combinators](docs/API.md#combinators) — `And`, `Or`, `Not`
 - [`prelude`](docs/API.md#prelude) — convenient re-exports
 - [`VERSION`](docs/API.md#version) — compile-time crate version
+
+Runnable demos live in [`examples/`](examples): `quick_start`, `built_in_rules`,
+`composing_rules`, and `custom_rule` (e.g. `cargo run --example quick_start`).
 
 ---
 
@@ -74,10 +98,13 @@ For the complete reference with examples, see [docs/API.md](docs/API.md).
 
 ```toml
 [dependencies]
-type-lib = "0.2.0"
+type-lib = "0.5.0"
 
-# no_std build
-type-lib = { version = "0.2.0", default-features = false }
+# no_std build (core API + borrowed-value rules)
+type-lib = { version = "0.5.0", default-features = false }
+
+# no_std + owned-type rules (String / Vec)
+type-lib = { version = "0.5.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -85,34 +112,25 @@ MSRV: Rust 1.75.
 ## Quick start
 
 ```rust
-use type_lib::{Refined, ValidationError, Validator};
+use type_lib::combinator::And;
+use type_lib::rules::{LenRange, Trimmed};
+use type_lib::Refined;
 
-// A rule, written once and reused anywhere through the type system.
-struct NonEmpty;
+// A username: 3–16 characters with no surrounding whitespace.
+// Built once, the type guarantees the invariant everywhere it is used.
+type Username = Refined<String, And<Trimmed, LenRange<3, 16>>>;
 
-impl<S: AsRef<str> + ?Sized> Validator<S> for NonEmpty {
-    type Error = ValidationError;
+fn main() {
+    let user = Username::new("alice".to_owned());
+    assert!(user.is_ok());
 
-    fn validate(value: &S) -> Result<(), Self::Error> {
-        if value.as_ref().is_empty() {
-            Err(ValidationError::new("non_empty", "value must not be empty"))
-        } else {
-            Ok(())
-        }
-    }
-}
-
-// A domain type that structurally cannot be empty.
-type Username = Refined<String, NonEmpty>;
-
-fn main() -> Result<(), ValidationError> {
-    let user = Username::new("alice".to_owned())?;
-    assert_eq!(user.len(), 5); // deref to the inner String
-
-    assert!(Username::new(String::new()).is_err());
-    Ok(())
+    assert!(Username::new("ab".to_owned()).is_err());        // too short
+    assert!(Username::new("  alice  ".to_owned()).is_err()); // whitespace
 }
 ```
+
+Need a rule the built-ins don't cover? Implement [`Validator`](docs/API.md#validator)
+on a marker type — see the [`custom_rule`](examples/custom_rule.rs) example.
 
 For the exhaustive API reference, see [docs/API.md](docs/API.md).
 
