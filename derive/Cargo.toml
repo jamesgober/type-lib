@@ -1,0 +1,36 @@
+[package]
+name = "type-lib-derive"
+version = "0.6.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0 OR MIT"
+
+authors = [
+    "James Gober <me@jamesgober.com>"
+]
+
+description = "Derive macro for type-lib: generate validated newtypes that enforce a Validator at construction."
+
+keywords = [
+    "validation",
+    "newtype",
+    "derive",
+    "macro",
+    "proc-macro"
+]
+
+categories = [
+    "rust-patterns"
+]
+
+documentation = "https://docs.rs/type-lib-derive"
+repository    = "https://github.com/jamesgober/type-lib"
+homepage      = "https://github.com/jamesgober/type-lib"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

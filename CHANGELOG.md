@@ -27,6 +27,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-05-27
+
+Adds the derive macro. Purely additive over `v0.5.0`.
+
+### Added
+
+- `type-lib-derive` companion proc-macro crate providing `#[derive(Validated)]`,
+  re-exported from `type-lib` as `type_lib::Validated` behind the new `derive`
+  feature. Applied to a single-field tuple struct with a `#[valid(<Validator>)]`
+  attribute, it generates a checked `new`, `get`, `into_inner`, `Deref`, and
+  `AsRef`, enforcing the given [`Validator`] at construction with the field kept
+  private.
+- `derive` Cargo feature (off by default).
+- `derive_newtype` example, and `tests/derive.rs` covering the macro.
+
+### Changed
+
+- The repository is now a Cargo workspace (`type-lib` plus `derive/`).
+- CI lints, tests, and documents the whole workspace (`--workspace`).
+- Examples declare `required-features` so `--no-default-features` builds skip
+  the `std`/`derive`-only demos.
+- README and `docs/API.md` document the derive macro and the `derive` feature.
+
+---
+
 ## [0.5.0] - 2026-05-27
 
 The implementation milestone: built-in rules, composition, property tests, and
@@ -129,7 +154,8 @@ The foundation milestone: the public API surface that `1.0` will preserve.
   `newline_style = "Unix"`. Linux and macOS were unaffected.
 - Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
-[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/jamesgober/type-lib/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jamesgober/type-lib/compare/v0.2.0...v0.5.0
 [0.2.0]: https://github.com/jamesgober/type-lib/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesgober/type-lib/releases/tag/v0.1.0

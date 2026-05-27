@@ -1,6 +1,6 @@
 ﻿[package]
 name = "type-lib"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 rust-version = "1.75"
 readme = "README.md"
@@ -33,6 +33,10 @@ homepage      = "https://github.com/jamesgober/type-lib"
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
+[workspace]
+members = ["derive"]
+resolver = "2"
+
 [lib]
 name = "type_lib"
 path = "src/lib.rs"
@@ -44,8 +48,11 @@ std = ["alloc"]
 # `alloc` enables the length rules for owned `String`/`Vec<T>` values. The core
 # `Validator`/`Refined` API and all borrowed-value rules work without it.
 alloc = []
+# `derive` enables the `#[derive(Validated)]` macro for validated newtypes.
+derive = ["dep:type-lib-derive"]
 
 [dependencies]
+type-lib-derive = { version = "0.6.0", path = "derive", optional = true }
 
 [dev-dependencies]
 # Property-based tests for rule and combinator invariants.
@@ -63,6 +70,28 @@ criterion = { version = "0.5", default-features = false, features = ["cargo_benc
 [[bench]]
 name = "validation"
 harness = false
+
+# The examples print output and use owned `String` values, so they require `std`.
+# Declaring this keeps `--no-default-features` builds from trying to compile them.
+[[example]]
+name = "quick_start"
+required-features = ["std"]
+
+[[example]]
+name = "built_in_rules"
+required-features = ["std"]
+
+[[example]]
+name = "composing_rules"
+required-features = ["std"]
+
+[[example]]
+name = "custom_rule"
+required-features = ["std"]
+
+[[example]]
+name = "derive_newtype"
+required-features = ["std", "derive"]
 
 [profile.release]
 opt-level = 3

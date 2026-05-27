@@ -73,11 +73,31 @@
 //! assert!(EvenI64::new(5).is_err());
 //! ```
 //!
+//! ## Deriving validated newtypes
+//!
+//! With the `derive` feature, `#[derive(Validated)]` generates a named domain
+//! type from a one-field tuple struct, enforcing a [`Validator`] at construction:
+//!
+//! ```rust
+//! # #[cfg(feature = "derive")] {
+//! use type_lib::rules::InRange;
+//! use type_lib::Validated;
+//!
+//! #[derive(Validated)]
+//! #[valid(InRange<0, 100>)]
+//! pub struct Percent(i32);
+//!
+//! assert!(Percent::new(50).is_ok());
+//! assert!(Percent::new(150).is_err());
+//! # }
+//! ```
+//!
 //! ## Cargo features
 //!
 //! - `std` *(default)* — implies `alloc` and implements [`std::error::Error`] for
 //!   [`ValidationError`].
 //! - `alloc` — enables the length rules for owned `String` / `Vec<T>` values.
+//! - `derive` — enables the [`Validated`] derive macro.
 //!
 //! With no features (`default-features = false`), the crate is `no_std` and the
 //! core [`Validator`] / [`Refined`] API plus all borrowed-value rules are
@@ -86,8 +106,8 @@
 //! ## Stability
 //!
 //! The public API established in `v0.2.0` is the surface 1.0 will preserve;
-//! `v0.5.0` adds the rule and combinator sets additively. A derive macro for
-//! generating validated newtypes is planned for a later milestone.
+//! `v0.5.0` added the rule and combinator sets and `v0.6.0` the `derive` macro,
+//! all additively.
 //!
 //! # License
 //!
@@ -125,6 +145,37 @@ pub mod rules;
 pub use crate::error::ValidationError;
 pub use crate::refined::Refined;
 pub use crate::validator::Validator;
+
+/// Derives a validated newtype: a one-field tuple struct gains a checked
+/// constructor, accessors, and `Deref`, enforcing a [`Validator`] at construction.
+///
+/// Available with the `derive` feature. Annotate the struct with
+/// `#[valid(<Validator>)]`, where the validator is any rule implementing
+/// [`Validator`] for the field type — a [built-in rule](crate::rules), a
+/// [combinator], or your own.
+///
+/// The generated `new` returns `Result<Self, <V as Validator<T>>::Error>`; `get`,
+/// `into_inner`, `Deref`, and `AsRef` expose the inner value. The field stays
+/// private, so construction must go through `new`.
+///
+/// # Examples
+///
+/// ```rust
+/// use type_lib::combinator::And;
+/// use type_lib::rules::{LenRange, Trimmed};
+/// use type_lib::Validated;
+///
+/// #[derive(Validated)]
+/// #[valid(And<Trimmed, LenRange<3, 16>>)]
+/// pub struct Username(String);
+///
+/// let user = Username::new("alice".to_owned()).expect("valid");
+/// assert_eq!(user.get(), "alice");
+/// assert!(Username::new("  ".to_owned()).is_err());
+/// ```
+#[cfg(feature = "derive")]
+#[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
+pub use type_lib_derive::Validated;
 
 /// Crate version string, populated by Cargo at build time.
 ///

@@ -51,6 +51,8 @@ own error type through `Validator::Error`.
   `Trimmed`).
 - **Composition** — combine rules at the type level with
   [`And`](docs/API.md#combinators), `Or`, and `Not`; the result is itself a rule.
+- **Derive macro** — `#[derive(Validated)]` (the `derive` feature) turns a newtype
+  into a named domain type with a checked constructor.
 - **Reusable, type-level rules** — write a `Validator` once and apply it to any
   value type through the type system.
 - **Tamper-proof by construction** — `Refined` exposes no `&mut` to its inner
@@ -86,11 +88,13 @@ For the complete reference with examples, see [docs/API.md](docs/API.md).
 - [`ValidationError`](docs/API.md#validationerror) — ready-made `no_std` error
 - [Built-in rules](docs/API.md#built-in-rules) — length, numeric, and string rules
 - [Combinators](docs/API.md#combinators) — `And`, `Or`, `Not`
+- [`Validated`](docs/API.md#validated-derive) — `#[derive]` for validated newtypes (`derive` feature)
 - [`prelude`](docs/API.md#prelude) — convenient re-exports
 - [`VERSION`](docs/API.md#version) — compile-time crate version
 
 Runnable demos live in [`examples/`](examples): `quick_start`, `built_in_rules`,
-`composing_rules`, and `custom_rule` (e.g. `cargo run --example quick_start`).
+`composing_rules`, `custom_rule`, and `derive_newtype`
+(e.g. `cargo run --example quick_start`).
 
 ---
 
@@ -98,13 +102,16 @@ Runnable demos live in [`examples/`](examples): `quick_start`, `built_in_rules`,
 
 ```toml
 [dependencies]
-type-lib = "0.5.0"
+type-lib = "0.6.0"
+
+# with the derive macro
+type-lib = { version = "0.6.0", features = ["derive"] }
 
 # no_std build (core API + borrowed-value rules)
-type-lib = { version = "0.5.0", default-features = false }
+type-lib = { version = "0.6.0", default-features = false }
 
 # no_std + owned-type rules (String / Vec)
-type-lib = { version = "0.5.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "0.6.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -127,6 +134,22 @@ fn main() {
     assert!(Username::new("ab".to_owned()).is_err());        // too short
     assert!(Username::new("  alice  ".to_owned()).is_err()); // whitespace
 }
+```
+
+Prefer a distinct named type with its own constructor? Enable the `derive`
+feature and annotate a newtype:
+
+```rust
+use type_lib::combinator::And;
+use type_lib::rules::{LenRange, Trimmed};
+use type_lib::Validated;
+
+#[derive(Validated)]
+#[valid(And<Trimmed, LenRange<3, 16>>)]
+pub struct Username(String);
+
+let user = Username::new("alice".to_owned());
+assert!(user.is_ok());
 ```
 
 Need a rule the built-ins don't cover? Implement [`Validator`](docs/API.md#validator)

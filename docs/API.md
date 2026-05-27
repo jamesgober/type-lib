@@ -34,6 +34,7 @@ runnable examples for each use case.
 		- [Numeric rules](#numeric-rules)
 		- [String rules](#string-rules)
 	- [Combinators](#combinators)
+	- [`Validated` (derive macro)](#validated-derive)
 	- [`prelude`](#prelude)
 	- [`VERSION`](#version)
 - [Patterns](#patterns)
@@ -48,7 +49,10 @@ runnable examples for each use case.
 
 ```toml
 [dependencies]
-type-lib = "0.5.0"
+type-lib = "0.6.0"
+
+# with the derive macro
+type-lib = { version = "0.6.0", features = ["derive"] }
 ```
 
 To build without the standard library, disable default features. The core
@@ -59,10 +63,10 @@ the `std::error::Error` impl on `ValidationError`.
 ```toml
 [dependencies]
 # no_std, core API + borrowed-value rules
-type-lib = { version = "0.5.0", default-features = false }
+type-lib = { version = "0.6.0", default-features = false }
 
 # no_std + owned-type rules
-type-lib = { version = "0.5.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "0.6.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -564,6 +568,103 @@ assert!(ApiKey::new("sk_live_0123456789abcdef".to_owned()).is_ok());
 assert!(ApiKey::new("short".to_owned()).is_err());
 ```
 
+### `Validated` (derive macro)
+
+Generates a named validated newtype. Requires the `derive` feature.
+
+```rust
+#[derive(Validated)]
+#[valid(/* a Validator type */)]
+struct Name(/* field type */);
+```
+
+**Description**
+
+- Apply `#[derive(Validated)]` to a **single-field tuple struct** and annotate it
+  with `#[valid(<Validator>)]`, where `<Validator>` is any type implementing
+  [`Validator`](#validator) for the field type — a [built-in rule](#built-in-rules),
+  a [combinator](#combinators), or your own.
+- Unlike a `type` alias for [`Refined`](#refined), this produces a distinct,
+  nominal type with its own name, constructor, and trait impls.
+- The inner field stays private, so the only way to construct the type from
+  outside its module is through the generated `new` — which is what keeps the
+  invariant trustworthy.
+
+**Generated items**
+
+- `fn new(value: T) -> Result<Self, <V as Validator<T>>::Error>` — validates and
+  wraps, or returns the validator's error.
+- `fn get(&self) -> &T` and `fn into_inner(self) -> T`.
+- `Deref<Target = T>` and `AsRef<T>`.
+
+Add ordinary derives (`Debug`, `Clone`, `PartialEq`, …) alongside `Validated` as
+usual.
+
+**Compile errors**
+
+The derive reports a clear error if applied to anything other than a single-field
+tuple struct, if the type is generic, or if `#[valid(...)]` is missing or
+duplicated.
+
+**Examples**
+
+A string newtype composed from built-in rules:
+
+```rust
+use type_lib::combinator::And;
+use type_lib::rules::{LenRange, Trimmed};
+use type_lib::Validated;
+
+#[derive(Validated, Debug, Clone, PartialEq)]
+#[valid(And<Trimmed, LenRange<3, 16>>)]
+struct Username(String);
+
+let user = Username::new("alice".to_owned()).expect("valid");
+assert_eq!(user.get(), "alice");
+assert_eq!(&*user, "alice"); // via Deref
+
+assert!(Username::new("ab".to_owned()).is_err());
+assert!(Username::new("  alice  ".to_owned()).is_err());
+```
+
+A numeric newtype:
+
+```rust
+use type_lib::rules::InRange;
+use type_lib::Validated;
+
+#[derive(Validated, Debug)]
+#[valid(InRange<0, 100>)]
+struct Percent(i32);
+
+assert_eq!(Percent::new(50).expect("in range").into_inner(), 50);
+assert!(Percent::new(150).is_err());
+```
+
+A newtype using a custom validator with a structured error:
+
+```rust
+use type_lib::{Validated, Validator};
+
+#[derive(Debug, PartialEq)]
+struct NotEven;
+
+struct Even;
+impl Validator<i64> for Even {
+    type Error = NotEven;
+    fn validate(value: &i64) -> Result<(), Self::Error> {
+        if value % 2 == 0 { Ok(()) } else { Err(NotEven) }
+    }
+}
+
+#[derive(Validated)]
+#[valid(Even)]
+struct EvenNumber(i64);
+
+assert!(EvenNumber::new(4).is_ok());
+assert_eq!(EvenNumber::new(5).unwrap_err(), NotEven);
+```
+
 ### `prelude`
 
 Convenience re-exports of the foundation types and combinators.
@@ -752,6 +853,11 @@ assert_eq!(*bumped, 6);
   `LenRange`) for owned `String` and `Vec<T>` values, via `HasLength` impls.
 - Implied by `std`. Enable it alone for `no_std` targets that have an allocator.
 
+### `derive`
+
+- Enables the [`Validated`](#validated-derive) derive macro (from the companion
+  `type-lib-derive` crate). Off by default.
+
 With no features (`default-features = false`), the crate is `no_std`: the
 `Validator` / `Refined` / `ValidationError` API and every borrowed-value rule
 (`&str`, `[T]`, numeric, string) are available; only owned-type length rules and
@@ -760,8 +866,8 @@ the `std::error::Error` impl are gated off.
 ## Semantics and Compatibility
 
 - The public API surface established in `v0.2.0` is what `1.0` will preserve;
-  `v0.5.0` adds the [rules](#built-in-rules) and [combinators](#combinators)
-  additively.
+  `v0.5.0` added the [rules](#built-in-rules) and [combinators](#combinators) and
+  `v0.6.0` the [`Validated`](#validated-derive) derive, all additively.
 - A `Refined<T, V>` can only be constructed by passing its validator: there is no
   unchecked constructor in the public API, so the invariant holds for every
   safely constructed value.
