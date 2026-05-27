@@ -19,63 +19,98 @@
 
 ## What it does
 
-`type-lib` is currently the project scaffold for a validated-domain-type crate.
-The long-term design is a parse-dont-validate toolkit for invariant-bearing
-newtypes, but `v0.1.0` intentionally keeps the shipped API minimal while the
-foundation is being finalized.
+`type-lib` makes invalid states unrepresentable. Instead of validating a value
+every time it is used, you validate it **once** — at construction — and carry a
+type that the compiler will only let exist in a valid state. Functions that take
+such a type are freed from defensive checks: the type system already did them.
 
-Today, the crate exposes a single public constant:
+The foundation is two pieces that compose:
 
-- `type_lib::VERSION` - the compile-time package version reported by Cargo.
+- [`Validator`](docs/API.md#validator) — a reusable, type-level validation rule.
+  It lives on a zero-sized marker type and is selected through the type system,
+  so it carries no state and no storage.
+- [`Refined`](docs/API.md#refined) — a `#[repr(transparent)]` wrapper holding a
+  value proven to satisfy a `Validator`. It has the exact size and layout of the
+  value it wraps, so the guarantee is free at runtime.
 
-What is already in place:
-
-- cross-platform CI for Linux, macOS, and Windows
-- REPS-aligned lint gates for shipping code
-- `std` by default with `no_std` compatibility when the default feature is disabled
-- documentation and release structure for subsequent milestones
-
-What is not in `v0.1.0` yet:
-
-- validated wrapper types
-- construction and parsing APIs
-- public error types and traits
-- derive macros
-
-This keeps the first release honest: the crate is publishable scaffolding, not a
-feature-complete type system library.
+A ready-made [`ValidationError`](docs/API.md#validationerror) covers rules that
+need only a code and a message; rules that need structured failures define their
+own error type through `Validator::Error`.
 
 ---
 
-## Current API
+## Features
 
-### `VERSION`
-
-The crate exports its package version as a `&'static str`:
-
-```rust
-assert_eq!(type_lib::VERSION, env!("CARGO_PKG_VERSION"));
-```
-
-Typical uses include startup banners, diagnostics, and smoke tests:
-
-```rust
-let banner = format!("type-lib {}", type_lib::VERSION);
-assert!(banner.contains(type_lib::VERSION));
-```
+- **Parse, don't validate** — invariants are enforced at construction and proven
+  by the type thereafter; no re-checking at call sites.
+- **Zero-overhead wrappers** — `Refined<T, V>` is `#[repr(transparent)]` over `T`
+  and stores nothing extra. The validated type is the same size as the raw one.
+- **Reusable, type-level rules** — write a `Validator` once and apply it to any
+  value type through the type system.
+- **Tamper-proof by construction** — `Refined` exposes no `&mut` to its inner
+  value and no public field, so a validated value cannot be mutated into an
+  invalid one behind the type's back.
+- **Bring your own error** — use the bundled `ValidationError` or any custom
+  error type via the `Validator::Error` associated type.
+- **`no_std` friendly** — the core API is identical with or without `std`; the
+  only `std`-gated item is the [`std::error::Error`] impl on `ValidationError`.
+- **Cross-platform** — Linux, macOS, and Windows on stable and MSRV 1.75.
 
 ---
 
-## Quick start
+## API Overview
+
+For the complete reference with examples, see [docs/API.md](docs/API.md).
+
+- [`Validator`](docs/API.md#validator) — reusable, type-level validation rule
+- [`Refined`](docs/API.md#refined) — zero-cost wrapper around a validated value
+- [`ValidationError`](docs/API.md#validationerror) — ready-made `no_std` error
+- [`prelude`](docs/API.md#prelude) — convenient re-exports
+- [`VERSION`](docs/API.md#version) — compile-time crate version
+
+---
+
+## Installation
 
 ```toml
 [dependencies]
-type-lib = "0.1.0"
+type-lib = "0.2.0"
+
+# no_std build
+type-lib = { version = "0.2.0", default-features = false }
 ```
 
+MSRV: Rust 1.75.
+
+## Quick start
+
 ```rust
-fn main() {
-  println!("using type-lib {}", type_lib::VERSION);
+use type_lib::{Refined, ValidationError, Validator};
+
+// A rule, written once and reused anywhere through the type system.
+struct NonEmpty;
+
+impl<S: AsRef<str> + ?Sized> Validator<S> for NonEmpty {
+    type Error = ValidationError;
+
+    fn validate(value: &S) -> Result<(), Self::Error> {
+        if value.as_ref().is_empty() {
+            Err(ValidationError::new("non_empty", "value must not be empty"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
+// A domain type that structurally cannot be empty.
+type Username = Refined<String, NonEmpty>;
+
+fn main() -> Result<(), ValidationError> {
+    let user = Username::new("alice".to_owned())?;
+    assert_eq!(user.len(), 5); // deref to the inner String
+
+    assert!(Username::new(String::new()).is_err());
+    Ok(())
 }
 ```
 

@@ -27,6 +27,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-05-27
+
+The foundation milestone: the public API surface that `1.0` will preserve.
+
+### Added
+
+- `Validator<T>` trait — a reusable, type-level validation rule with an
+  associated `Error` type and a single `validate` method.
+- `Refined<T, V>` — a `#[repr(transparent)]` wrapper holding a value proven to
+  satisfy a `Validator`. Constructed only through the validating `Refined::new`;
+  exposes `get`, `into_inner`, `Deref`, and `AsRef`, and delegates `Clone`,
+  `Copy`, `Debug`, `Display`, `PartialEq`, `Eq`, `PartialOrd`, `Ord`, and `Hash`
+  to the inner value (bounded on `T`, never on the marker `V`).
+- `ValidationError` — a `Copy`, allocation-free, `no_std` error carrying a stable
+  `code` and a human-readable `message`, with a `const` constructor and a
+  `Display` of `"<code>: <message>"`. Implements `std::error::Error` under `std`.
+- `prelude` module re-exporting `Refined`, `Validator`, and `ValidationError`.
+- Unit tests on every public item plus an end-to-end integration suite
+  (`tests/foundation.rs`).
+
+### Changed
+
+- Crate-level documentation now describes the parse-dont-validate foundation and
+  its usage instead of the scaffold-only surface.
+- README and `docs/API.md` rewritten to cover the full `v0.2.0` API with
+  examples for each item and common pattern.
+
+---
+
 ## [0.1.0] - 2026-05-27
 
 ### Added
@@ -64,5 +93,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `newline_style = "Unix"`. Linux and macOS were unaffected.
 - Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
-[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jamesgober/type-lib/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/jamesgober/type-lib/releases/tag/v0.1.0

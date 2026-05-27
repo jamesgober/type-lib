@@ -1,29 +1,66 @@
 //! # type-lib
 //!
-//! Validated domain types for Rust.
+//! Parse-dont-validate domain types for Rust, with zero-overhead wrappers.
 //!
-//! `type-lib` is in the scaffold phase. The crate currently exposes only build and
-//! package metadata while the public API for validated domain types is finalized.
-//! The long-term goal remains parse-dont-validate domain modeling with zero-cost
-//! wrapper types, but those facilities are not part of `v0.1.0` yet.
+//! `type-lib` turns runtime invariants into compile-time guarantees. Rather than
+//! re-checking a value everywhere it is used, you check it **once**, at
+//! construction, and carry a type that can only exist in a valid state. Functions
+//! that accept such a type are freed from defensive validation: the type system
+//! has already done it.
 //!
-//! ## Current API surface
+//! ## The foundation
 //!
-//! The current public API consists of:
+//! Two pieces compose to express "a value that is known to be valid":
 //!
-//! - [`VERSION`], the crate version embedded at compile time.
+//! - [`Validator`] — a reusable, type-level validation rule. It is implemented on
+//!   a zero-sized marker type and selected through the type system, so it carries
+//!   no state and adds no storage.
+//! - [`Refined`] — a `#[repr(transparent)]` wrapper holding a value proven to
+//!   satisfy a [`Validator`]. It has the same size and layout as the value it
+//!   wraps, so the guarantee is free at runtime.
+//!
+//! A ready-made [`ValidationError`] covers rules that need only a code and a
+//! message; rules that need structured failures define their own error type via
+//! [`Validator::Error`].
 //!
 //! ## Example
 //!
 //! ```rust
-//! assert_eq!(type_lib::VERSION, env!("CARGO_PKG_VERSION"));
+//! use type_lib::{Refined, ValidationError, Validator};
+//!
+//! // A rule, written once and reused anywhere through the type system.
+//! struct NonEmpty;
+//!
+//! impl<S: AsRef<str> + ?Sized> Validator<S> for NonEmpty {
+//!     type Error = ValidationError;
+//!
+//!     fn validate(value: &S) -> Result<(), Self::Error> {
+//!         if value.as_ref().is_empty() {
+//!             Err(ValidationError::new("non_empty", "value must not be empty"))
+//!         } else {
+//!             Ok(())
+//!         }
+//!     }
+//! }
+//!
+//! // A domain type that structurally cannot be empty.
+//! type Username = Refined<String, NonEmpty>;
+//!
+//! let user = Username::new("alice".to_owned());
+//! assert!(user.is_ok());
+//! assert!(Username::new(String::new()).is_err());
 //! ```
 //!
-//! ## Status
+//! ## Cargo features
 //!
-//! `v0.1.0` establishes the repository scaffold, lint policy, CI workflow, and
-//! documentation structure. The validated type constructors, error types, traits,
-//! and derive support planned for later milestones are intentionally absent.
+//! - `std` *(default)* — implements [`std::error::Error`] for [`ValidationError`].
+//!   Disable it (`default-features = false`) to build for `no_std`; the core
+//!   [`Validator`] / [`Refined`] API is identical either way.
+//!
+//! ## Stability
+//!
+//! `v0.2.0` establishes the public API that 1.0 will preserve. Built-in rule sets
+//! and a derive macro are planned for later milestones and will be additive.
 //!
 //! # License
 //!
@@ -47,11 +84,20 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![deny(clippy::missing_safety_doc)]
 
+mod error;
+mod refined;
+mod validator;
+
+pub mod prelude;
+
+pub use crate::error::ValidationError;
+pub use crate::refined::Refined;
+pub use crate::validator::Validator;
+
 /// Crate version string, populated by Cargo at build time.
 ///
-/// This is the only public item exposed by the `v0.1.0` scaffold. It is useful
-/// for diagnostics, startup banners, and tests that need to assert the crate
-/// metadata seen by Cargo.
+/// Useful for diagnostics, startup banners, and tests that need to assert the
+/// crate metadata seen by Cargo.
 ///
 /// # Examples
 ///
