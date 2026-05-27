@@ -27,6 +27,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.9.0] - 2026-05-27
+
+Hardening and the pre-1.0 audit. Feature-frozen: no API changes, no new public
+items. The audit report is in [`docs/release/v0.9.0.md`](docs/release/v0.9.0.md).
+
+### Fixed
+
+- `cargo doc` no longer warns under the default or `no_std` feature sets. The
+  `[`Validated`]` intra-doc link (resolvable only with the `derive` feature) and
+  the `[`std::error::Error`]` link (resolvable only with `std`) were demoted to
+  plain code spans so documentation builds clean in every feature configuration.
+
+### Changed
+
+- CI now lints, tests, and documents the `--no-default-features` (`no_std`)
+  configuration in addition to `--all-features`, closing the gap that let the
+  feature-specific doc warnings reach a release.
+
+---
+
 ## [0.6.0] - 2026-05-27
 
 Adds the derive macro. Purely additive over `v0.5.0`.
@@ -154,7 +174,8 @@ The foundation milestone: the public API surface that `1.0` will preserve.
   `newline_style = "Unix"`. Linux and macOS were unaffected.
 - Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
-[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/jamesgober/type-lib/compare/v0.6.0...v0.9.0
 [0.6.0]: https://github.com/jamesgober/type-lib/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jamesgober/type-lib/compare/v0.2.0...v0.5.0
 [0.2.0]: https://github.com/jamesgober/type-lib/compare/v0.1.0...v0.2.0

@@ -94,10 +94,11 @@
 //!
 //! ## Cargo features
 //!
-//! - `std` *(default)* — implies `alloc` and implements [`std::error::Error`] for
+//! - `std` *(default)* — implies `alloc` and implements `std::error::Error` for
 //!   [`ValidationError`].
 //! - `alloc` — enables the length rules for owned `String` / `Vec<T>` values.
-//! - `derive` — enables the [`Validated`] derive macro.
+//! - `derive` — enables the `Validated` derive macro (see [Deriving validated
+//!   newtypes](#deriving-validated-newtypes)).
 //!
 //! With no features (`default-features = false`), the crate is `no_std` and the
 //! core [`Validator`] / [`Refined`] API plus all borrowed-value rules are
@@ -107,7 +108,7 @@
 //!
 //! The public API established in `v0.2.0` is the surface 1.0 will preserve;
 //! `v0.5.0` added the rule and combinator sets and `v0.6.0` the `derive` macro,
-//! all additively.
+//! all additively. `v0.9.0` is feature-frozen pending the 1.0 stabilization.
 //!
 //! # License
 //!

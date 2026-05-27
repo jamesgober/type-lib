@@ -521,7 +521,7 @@ dependencies = [
 
 [[package]]
 name = "type-lib"
-version = "0.6.0"
+version = "0.9.0"
 dependencies = [
  "criterion",
  "proptest",
@@ -530,7 +530,7 @@ dependencies = [
 
 [[package]]
 name = "type-lib-derive"
-version = "0.6.0"
+version = "0.9.0"
 dependencies = [
  "proc-macro2",
  "quote",

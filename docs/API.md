@@ -17,7 +17,7 @@
 
 `type-lib` enforces domain invariants at construction and proves them through the
 type system thereafter — the parse-dont-validate pattern. This document is the
-complete reference for the public API as of `v0.5.0`: every exported item, what
+complete reference for the public API as of `v0.9.0`: every exported item, what
 it does, the meaning of each parameter and return value, the error semantics, and
 runnable examples for each use case.
 
@@ -49,10 +49,10 @@ runnable examples for each use case.
 
 ```toml
 [dependencies]
-type-lib = "0.6.0"
+type-lib = "0.9.0"
 
 # with the derive macro
-type-lib = { version = "0.6.0", features = ["derive"] }
+type-lib = { version = "0.9.0", features = ["derive"] }
 ```
 
 To build without the standard library, disable default features. The core
@@ -63,10 +63,10 @@ the `std::error::Error` impl on `ValidationError`.
 ```toml
 [dependencies]
 # no_std, core API + borrowed-value rules
-type-lib = { version = "0.6.0", default-features = false }
+type-lib = { version = "0.9.0", default-features = false }
 
 # no_std + owned-type rules
-type-lib = { version = "0.6.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "0.9.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -103,9 +103,10 @@ assert!(Username::new(String::new()).is_err());
 
 ## Public API
 
-The complete public surface in `v0.2.0` is two traits/types for expressing rules
-and validated values (`Validator`, `Refined`), one ready-made error
-(`ValidationError`), the `prelude` module, and the `VERSION` constant.
+The public surface is the foundation (`Validator`, `Refined`, `ValidationError`),
+the built-in [rules](#built-in-rules) and [combinators](#combinators), the
+[`Validated`](#validated-derive) derive (under the `derive` feature), the
+`prelude`, and the `VERSION` constant.
 
 ### `Validator`
 

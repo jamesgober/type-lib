@@ -22,7 +22,7 @@ use core::fmt;
 /// end-user diagnostics. Keep the code stable across releases even if you reword
 /// the message.
 ///
-/// Under the `std` feature it implements [`std::error::Error`], so it slots into
+/// Under the `std` feature it implements `std::error::Error`, so it slots into
 /// `?` and `Box<dyn Error>` chains without ceremony.
 ///
 /// # Examples

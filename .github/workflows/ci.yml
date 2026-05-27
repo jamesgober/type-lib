@@ -37,8 +37,17 @@ jobs:
             target
           key: ${{ runner.os }}-${{ matrix.rust }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - run: cargo fmt --all -- --check
+      # All features: lint/test/document the whole workspace, including benches,
+      # examples, and the derive crate.
       - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - run: cargo test --workspace --all-features
       - run: cargo doc --workspace --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+      # no_std (no default features): the core API and borrowed-value rules must
+      # lint, test, and document cleanly without `std`/`alloc`.
+      - run: cargo clippy --no-default-features --lib --tests -- -D warnings
+      - run: cargo test --no-default-features
+      - run: cargo doc --no-deps --no-default-features
         env:
           RUSTDOCFLAGS: "-D warnings"
