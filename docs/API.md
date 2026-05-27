@@ -17,7 +17,7 @@
 
 `type-lib` enforces domain invariants at construction and proves them through the
 type system thereafter — the parse-dont-validate pattern. This document is the
-complete reference for the public API as of `v0.9.0`: every exported item, what
+complete reference for the public API as of `v1.0.0`: every exported item, what
 it does, the meaning of each parameter and return value, the error semantics, and
 runnable examples for each use case.
 
@@ -49,10 +49,10 @@ runnable examples for each use case.
 
 ```toml
 [dependencies]
-type-lib = "0.9.0"
+type-lib = "1.0.0"
 
 # with the derive macro
-type-lib = { version = "0.9.0", features = ["derive"] }
+type-lib = { version = "1.0.0", features = ["derive"] }
 ```
 
 To build without the standard library, disable default features. The core
@@ -63,10 +63,10 @@ the `std::error::Error` impl on `ValidationError`.
 ```toml
 [dependencies]
 # no_std, core API + borrowed-value rules
-type-lib = { version = "0.9.0", default-features = false }
+type-lib = { version = "1.0.0", default-features = false }
 
 # no_std + owned-type rules
-type-lib = { version = "0.9.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "1.0.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -866,14 +866,18 @@ the `std::error::Error` impl are gated off.
 
 ## Semantics and Compatibility
 
-- The public API surface established in `v0.2.0` is what `1.0` will preserve;
-  `v0.5.0` added the [rules](#built-in-rules) and [combinators](#combinators) and
-  `v0.6.0` the [`Validated`](#validated-derive) derive, all additively.
+- **`v1.0.0` is the stable API.** Everything documented here is frozen under
+  SemVer: no breaking change will ship without a `2.0`. Additions (new rules,
+  combinators, trait impls) are minor releases; bug fixes are patches.
+- The error **codes** returned by the built-in rules (`"non_empty"`, `"max_len"`,
+  `"in_range"`, `"trimmed"`, `"not"`, …) are part of the contract and stable
+  across `1.x`. Human-readable messages may be reworded in a patch release.
 - A `Refined<T, V>` can only be constructed by passing its validator: there is no
   unchecked constructor in the public API, so the invariant holds for every
   safely constructed value.
 - `Refined` is `#[repr(transparent)]` over `T`; its size and alignment match `T`.
 - Every built-in rule reports [`ValidationError`](#validationerror), so they
   compose under [`And`](#combinators) / `Or` without error-type juggling.
-- A derive macro for generating validated newtypes is planned for a later
-  milestone. It will be additive and will not break this surface.
+- [`Validator`](#validator) and [`HasLength`](#length-rules) are intentionally
+  open (not sealed): implementing them for your own rules and containers is a
+  supported, stable extension point.

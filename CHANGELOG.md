@@ -27,6 +27,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.0.0] - 2026-05-27
+
+The first stable release. The public API is frozen under SemVer.
+
+### Changed
+
+- Stabilized the public API at `1.0`. No code changes from `0.9.0`; the surface
+  (`Validator`, `Refined`, `ValidationError`, the [rules] and [combinators], and
+  the `Validated` derive) is now covered by the SemVer compatibility promise — no
+  breaking change will ship without a `2.0`.
+- Documented the `1.x` stability guarantees, including that built-in rule error
+  codes are stable (only messages may be reworded).
+- Captured final benchmark numbers (see `docs/release/v1.0.0.md`).
+
+[rules]: https://github.com/jamesgober/type-lib/blob/main/docs/API.md#built-in-rules
+[combinators]: https://github.com/jamesgober/type-lib/blob/main/docs/API.md#combinators
+
+---
+
 ## [0.9.0] - 2026-05-27
 
 Hardening and the pre-1.0 audit. Feature-frozen: no API changes, no new public
@@ -174,7 +193,8 @@ The foundation milestone: the public API surface that `1.0` will preserve.
   `newline_style = "Unix"`. Linux and macOS were unaffected.
 - Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
-[Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/jamesgober/type-lib/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jamesgober/type-lib/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/jamesgober/type-lib/compare/v0.6.0...v0.9.0
 [0.6.0]: https://github.com/jamesgober/type-lib/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jamesgober/type-lib/compare/v0.2.0...v0.5.0

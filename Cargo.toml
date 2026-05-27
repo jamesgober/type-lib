@@ -1,6 +1,6 @@
 ﻿[package]
 name = "type-lib"
-version = "0.9.0"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.75"
 readme = "README.md"
@@ -52,7 +52,7 @@ alloc = []
 derive = ["dep:type-lib-derive"]
 
 [dependencies]
-type-lib-derive = { version = "0.9.0", path = "derive", optional = true }
+type-lib-derive = { version = "1.0.0", path = "derive", optional = true }
 
 [dev-dependencies]
 # Property-based tests for rule and combinator invariants.

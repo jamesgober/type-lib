@@ -5,7 +5,7 @@
 //! rather than on this crate directly:
 //!
 //! ```toml
-//! type-lib = { version = "0.9", features = ["derive"] }
+//! type-lib = { version = "1.0", features = ["derive"] }
 //! ```
 
 #![forbid(unsafe_code)]

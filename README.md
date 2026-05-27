@@ -102,16 +102,16 @@ Runnable demos live in [`examples/`](examples): `quick_start`, `built_in_rules`,
 
 ```toml
 [dependencies]
-type-lib = "0.9.0"
+type-lib = "1.0.0"
 
 # with the derive macro
-type-lib = { version = "0.9.0", features = ["derive"] }
+type-lib = { version = "1.0.0", features = ["derive"] }
 
 # no_std build (core API + borrowed-value rules)
-type-lib = { version = "0.9.0", default-features = false }
+type-lib = { version = "1.0.0", default-features = false }
 
 # no_std + owned-type rules (String / Vec)
-type-lib = { version = "0.9.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "1.0.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.

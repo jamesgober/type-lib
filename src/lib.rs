@@ -106,9 +106,10 @@
 //!
 //! ## Stability
 //!
-//! The public API established in `v0.2.0` is the surface 1.0 will preserve;
-//! `v0.5.0` added the rule and combinator sets and `v0.6.0` the `derive` macro,
-//! all additively. `v0.9.0` is feature-frozen pending the 1.0 stabilization.
+//! `v1.0.0` is the stable API. The public surface is frozen under SemVer: no
+//! breaking change ships without a `2.0`. New rules, combinators, and trait impls
+//! arrive as additive minor releases. The error codes returned by the built-in
+//! rules are stable across `1.x`.
 //!
 //! # License
 //!
