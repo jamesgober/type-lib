@@ -58,6 +58,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the manifest failed to parse on every toolchain until this was reconciled.
 - Normalized source files to UTF-8 without a byte-order mark and with a
   trailing newline so `cargo fmt --all -- --check` passes.
+- Added a `.gitattributes` enforcing LF line endings on checkout. The Windows
+  CI runner (`git autocrlf=true`) was checking source out with CRLF, which
+  failed `cargo fmt --all -- --check` because `rustfmt.toml` pins
+  `newline_style = "Unix"`. Linux and macOS were unaffected.
+- Aligned the `rustfmt.toml` `edition` with the crate edition (`2021`).
 
 [Unreleased]: https://github.com/jamesgober/type-lib/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/jamesgober/type-lib/releases/tag/v0.1.0
