@@ -17,7 +17,7 @@
 
 `type-lib` enforces domain invariants at construction and proves them through the
 type system thereafter — the parse-dont-validate pattern. This document is the
-complete reference for the public API as of `v1.0.0`: every exported item, what
+complete reference for the public API as of `v1.1.0`: every exported item, what
 it does, the meaning of each parameter and return value, the error semantics, and
 runnable examples for each use case.
 
@@ -34,7 +34,7 @@ runnable examples for each use case.
 		- [Numeric rules](#numeric-rules)
 		- [String rules](#string-rules)
 	- [Combinators](#combinators)
-	- [`Validated` (derive macro)](#validated-derive)
+	- [`Validated` (derive macro)](#validated-derive-macro)
 	- [`prelude`](#prelude)
 	- [`VERSION`](#version)
 - [Patterns](#patterns)
@@ -49,10 +49,10 @@ runnable examples for each use case.
 
 ```toml
 [dependencies]
-type-lib = "1.0.0"
+type-lib = "1.1.0"
 
 # with the derive macro
-type-lib = { version = "1.0.0", features = ["derive"] }
+type-lib = { version = "1.1.0", features = ["derive"] }
 ```
 
 To build without the standard library, disable default features. The core
@@ -63,10 +63,10 @@ the `std::error::Error` impl on `ValidationError`.
 ```toml
 [dependencies]
 # no_std, core API + borrowed-value rules
-type-lib = { version = "1.0.0", default-features = false }
+type-lib = { version = "1.1.0", default-features = false }
 
 # no_std + owned-type rules
-type-lib = { version = "1.0.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "1.1.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -105,7 +105,7 @@ assert!(Username::new(String::new()).is_err());
 
 The public surface is the foundation (`Validator`, `Refined`, `ValidationError`),
 the built-in [rules](#built-in-rules) and [combinators](#combinators), the
-[`Validated`](#validated-derive) derive (under the `derive` feature), the
+[`Validated`](#validated-derive-macro) derive (under the `derive` feature), the
 `prelude`, and the `VERSION` constant.
 
 ### `Validator`
@@ -233,6 +233,13 @@ pub struct Refined<T, V: Validator<T>> { /* private */ }
   marker, so it has the exact same size and layout as `T`.
 - There is no `DerefMut`, no public field, and no unchecked constructor: a
   `Refined` cannot be mutated into an invalid state behind the type's back.
+- Precondition on `T`: the rule is checked once, in `new`, and `Deref` hands out
+  `&T`. If `T` allows mutation through `&T` (`Cell`, `RefCell`, atomics, `Mutex`,
+  or a type that holds one), the value can change after validation and the
+  invariant no longer holds.
+- `Refined` does not implement `Deserialize`. To read a validated value from the
+  wire, use a [`Validated`](#validated-derive-macro) newtype with
+  `#[serde(try_from = "T")]`, or deserialize `T` and call `Refined::new`.
 
 **Type parameters**
 
@@ -429,6 +436,16 @@ slices and vectors it is the element count.
 
 Error codes: `"non_empty"`, `"min_len"`, `"max_len"`, `"len_range"`.
 
+`LenRange<MIN, MAX>` with `MIN > MAX` fails to build where it is used, instead of
+compiling into a rule that rejects everything.
+
+The rules ask for the length through `HasLength::length_at_most(limit)`, which
+returns the exact length when it is at most `limit` and any larger value
+otherwise. For strings this stops early: a `MaxLen<16>` check on a 64 MiB string
+looks at the byte length and returns without counting. The default method calls
+`length`, so existing `HasLength` impls keep working unchanged; override it when
+counting your type is expensive.
+
 ```rust
 use type_lib::rules::{LenRange, MaxLen, NonEmpty};
 use type_lib::Validator;
@@ -468,9 +485,17 @@ bounds.
 | `Negative` | `value < 0` |
 | `NonPositive` | `value <= 0` |
 | `InRange<MIN, MAX>` | `MIN <= value <= MAX` (inclusive) |
+| `Finite` | not NaN and not infinite (`f32`, `f64`) |
 
 Error codes: `"positive"`, `"non_negative"`, `"negative"`, `"non_positive"`,
-`"in_range"`.
+`"in_range"`, `"finite"`.
+
+`InRange<MIN, MAX>` with `MIN > MAX` fails to build where it is used.
+
+Floating-point edge cases: every sign rule rejects NaN. `Positive` and
+`NonNegative` accept positive infinity, and `Negative` and `NonPositive` accept
+negative infinity. `Not<Positive>` accepts NaN, because `Not` inverts a rejection.
+Use `And<Finite, ...>` when NaN and infinity must be rejected.
 
 ```rust
 use type_lib::rules::{InRange, Positive};
@@ -498,10 +523,15 @@ string types). They check character content only; combine with a length rule via
 |---|---|
 | `Ascii` | every character is ASCII |
 | `Alphanumeric` | every character is alphanumeric (Unicode) |
+| `AsciiAlphanumeric` | every character is an ASCII letter or digit |
 | `Trimmed` | no leading or trailing whitespace |
 
-Error codes: `"ascii"`, `"alphanumeric"`, `"trimmed"`. An empty string passes
-`Ascii` and `Alphanumeric` vacuously.
+Error codes: `"ascii"`, `"alphanumeric"`, `"ascii_alphanumeric"`, `"trimmed"`. An
+empty string passes `Ascii`, `Alphanumeric`, and `AsciiAlphanumeric` vacuously.
+
+`Alphanumeric` accepts letters and digits from every script, so two strings that
+look the same can differ (Latin `a` and Cyrillic `а`). For usernames and other
+identifiers, use `AsciiAlphanumeric`.
 
 ```rust
 use type_lib::rules::{Alphanumeric, Ascii, Trimmed};
@@ -587,9 +617,9 @@ struct Name(/* field type */);
   a [combinator](#combinators), or your own.
 - Unlike a `type` alias for [`Refined`](#refined), this produces a distinct,
   nominal type with its own name, constructor, and trait impls.
-- The inner field stays private, so the only way to construct the type from
-  outside its module is through the generated `new` — which is what keeps the
-  invariant trustworthy.
+- The inner field must be private. The derive rejects `pub`, `pub(crate)`, and
+  `pub(super)` fields with a compile error, because a visible field lets other
+  code build or change the value without `new`.
 
 **Generated items**
 
@@ -597,15 +627,47 @@ struct Name(/* field type */);
   wraps, or returns the validator's error.
 - `fn get(&self) -> &T` and `fn into_inner(self) -> T`.
 - `Deref<Target = T>` and `AsRef<T>`.
+- `TryFrom<T>`, which calls `new`.
 
-Add ordinary derives (`Debug`, `Clone`, `PartialEq`, …) alongside `Validated` as
-usual.
+**Other derives**
+
+Safe next to `Validated`: `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`,
+`PartialOrd`, `Ord`, `Hash`, and `serde::Serialize`.
+
+Not safe: `Default`, `serde::Deserialize` on its own, and any other derive that
+builds the struct field by field. They skip `new` and can produce a value the
+validator rejects. To deserialize, add `#[serde(try_from = "T")]`, which sends
+every value through the generated `TryFrom<T>`:
+
+```rust,ignore
+#[derive(Validated, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+#[valid(And<Trimmed, LenRange<3, 16>>)]
+pub struct Username(String);
+
+impl From<Username> for String {
+    fn from(u: Username) -> String {
+        u.into_inner()
+    }
+}
+```
+
+For a default value, write `impl Default` by hand and build the value with `new`.
+
+The same interior-mutability precondition as [`Refined`](#refined) applies to the
+field type.
+
+**Options**
+
+- `#[valid(V, crate = path)]` sets the path the generated code uses for
+  `type-lib` (default `::type_lib`). Use it when the crate is renamed in
+  `Cargo.toml` or reached through a re-export.
 
 **Compile errors**
 
 The derive reports a clear error if applied to anything other than a single-field
-tuple struct, if the type is generic, or if `#[valid(...)]` is missing or
-duplicated.
+tuple struct, if the type is generic, if the field is not private, or if
+`#[valid(...)]` is missing or duplicated.
 
 **Examples**
 
@@ -856,7 +918,7 @@ assert_eq!(*bumped, 6);
 
 ### `derive`
 
-- Enables the [`Validated`](#validated-derive) derive macro (from the companion
+- Enables the [`Validated`](#validated-derive-macro) derive macro (from the companion
   `type-lib-derive` crate). Off by default.
 
 With no features (`default-features = false`), the crate is `no_std`: the
@@ -874,7 +936,8 @@ the `std::error::Error` impl are gated off.
   across `1.x`. Human-readable messages may be reworded in a patch release.
 - A `Refined<T, V>` can only be constructed by passing its validator: there is no
   unchecked constructor in the public API, so the invariant holds for every
-  safely constructed value.
+  safely constructed value whose `T` cannot change through `&T` (see
+  [`Refined`](#refined)).
 - `Refined` is `#[repr(transparent)]` over `T`; its size and alignment match `T`.
 - Every built-in rule reports [`ValidationError`](#validationerror), so they
   compose under [`And`](#combinators) / `Or` without error-type juggling.

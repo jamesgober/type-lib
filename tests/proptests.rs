@@ -6,7 +6,7 @@
 
 use proptest::prelude::*;
 use type_lib::combinator::{And, Not, Or};
-use type_lib::rules::{InRange, MaxLen, MinLen, NonEmpty};
+use type_lib::rules::{HasLength, InRange, LenRange, MaxLen, MinLen, NonEmpty};
 use type_lib::{Refined, Validator};
 
 /// Whether a rule accepts a value, as a plain boolean.
@@ -33,6 +33,24 @@ proptest! {
         const N: usize = 4;
         let expected = s.chars().count() >= N;
         prop_assert_eq!(accepts::<str, MinLen<N>>(&s), expected);
+    }
+
+    #[test]
+    fn length_at_most_agrees_with_char_count(s in ".{0,40}", limit in 0usize..48) {
+        let exact = s.chars().count();
+        let got = s.length_at_most(limit);
+        if exact <= limit {
+            prop_assert_eq!(got, exact);
+        } else {
+            prop_assert!(got > limit);
+        }
+    }
+
+    #[test]
+    fn len_range_matches_char_count(s in ".{0,40}") {
+        let n = s.chars().count();
+        let expected = (3..=16).contains(&n);
+        prop_assert_eq!(accepts::<str, LenRange<3, 16>>(&s), expected);
     }
 
     #[test]

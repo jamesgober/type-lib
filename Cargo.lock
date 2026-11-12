@@ -521,16 +521,18 @@ dependencies = [
 
 [[package]]
 name = "type-lib"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "criterion",
  "proptest",
+ "serde",
+ "serde_json",
  "type-lib-derive",
 ]
 
 [[package]]
 name = "type-lib-derive"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "proc-macro2",
  "quote",

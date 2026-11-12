@@ -54,6 +54,11 @@ impl<S: AsRef<str> + ?Sized> Validator<S> for Ascii {
 /// assert!(Alphanumeric::validate("abc 123").is_err()); // space
 /// assert!(Alphanumeric::validate("user_name").is_err()); // underscore
 /// ```
+///
+/// Because it is Unicode-aware, this rule accepts letters and digits from every
+/// script, including lookalikes such as Cyrillic `а` (U+0430) next to Latin `a`.
+/// For identifiers, usernames, and anything compared by eye, use
+/// [`AsciiAlphanumeric`] instead.
 pub struct Alphanumeric;
 
 impl<S: AsRef<str> + ?Sized> Validator<S> for Alphanumeric {
@@ -66,6 +71,40 @@ impl<S: AsRef<str> + ?Sized> Validator<S> for Alphanumeric {
             Err(ValidationError::new(
                 "alphanumeric",
                 "value must contain only alphanumeric characters",
+            ))
+        }
+    }
+}
+
+/// Accepts strings whose characters are all ASCII letters or digits
+/// (`a-z`, `A-Z`, `0-9`).
+///
+/// Unlike [`Alphanumeric`], this rejects letters and digits outside ASCII, so two
+/// accepted strings that look the same are the same. An empty string passes
+/// vacuously; combine with [`NonEmpty`](super::NonEmpty) to also require content.
+///
+/// # Examples
+///
+/// ```rust
+/// use type_lib::rules::AsciiAlphanumeric;
+/// use type_lib::Validator;
+///
+/// assert!(AsciiAlphanumeric::validate("admin42").is_ok());
+/// assert!(AsciiAlphanumeric::validate("\u{0430}dmin").is_err()); // Cyrillic a
+/// assert!(AsciiAlphanumeric::validate("user_name").is_err());
+/// ```
+pub struct AsciiAlphanumeric;
+
+impl<S: AsRef<str> + ?Sized> Validator<S> for AsciiAlphanumeric {
+    type Error = ValidationError;
+
+    fn validate(value: &S) -> Result<(), Self::Error> {
+        if value.as_ref().bytes().all(|b| b.is_ascii_alphanumeric()) {
+            Ok(())
+        } else {
+            Err(ValidationError::new(
+                "ascii_alphanumeric",
+                "value must contain only ASCII letters and digits",
             ))
         }
     }
@@ -122,6 +161,22 @@ mod tests {
         assert!(Alphanumeric::validate("Abc123").is_ok());
         assert!(Alphanumeric::validate("").is_ok());
         assert!(Alphanumeric::validate("a-b").is_err());
+    }
+
+    #[test]
+    fn ascii_alphanumeric_rejects_non_ascii_lookalikes() {
+        assert!(AsciiAlphanumeric::validate("Abc123").is_ok());
+        assert!(AsciiAlphanumeric::validate("").is_ok());
+        assert_eq!(
+            AsciiAlphanumeric::validate("\u{0430}dmin")
+                .unwrap_err()
+                .code(),
+            "ascii_alphanumeric",
+        );
+        assert!(AsciiAlphanumeric::validate("\u{216B}\u{0663}").is_err());
+        assert!(AsciiAlphanumeric::validate("a-b").is_err());
+        // The Unicode rule still accepts them, as documented.
+        assert!(Alphanumeric::validate("\u{0430}dmin").is_ok());
     }
 
     #[test]
