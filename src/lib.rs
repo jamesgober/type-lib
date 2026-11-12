@@ -157,8 +157,85 @@ pub use crate::validator::Validator;
 /// [combinator], or your own.
 ///
 /// The generated `new` returns `Result<Self, <V as Validator<T>>::Error>`; `get`,
-/// `into_inner`, `Deref`, and `AsRef` expose the inner value. The field stays
-/// private, so construction must go through `new`.
+/// `into_inner`, `Deref`, and `AsRef` expose the inner value, and `TryFrom<T>`
+/// calls `new`.
+///
+/// The field must be private. The derive rejects `pub`, `pub(crate)`, and
+/// `pub(super)` fields, because a visible field lets other code build or change
+/// the value without `new`:
+///
+/// ```compile_fail
+/// use type_lib::rules::InRange;
+/// use type_lib::Validated;
+///
+/// #[derive(Validated)]
+/// #[valid(InRange<0, 100>)]
+/// pub struct Percent(pub i32); // error: the field must be private
+/// ```
+///
+/// ```compile_fail
+/// use type_lib::rules::InRange;
+/// use type_lib::Validated;
+///
+/// #[derive(Validated)]
+/// #[valid(InRange<0, 100>)]
+/// pub struct Percent(pub(crate) i32); // error: the field must be private
+/// ```
+///
+/// # Other derives
+///
+/// Safe next to `Validated`: `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq`,
+/// `PartialOrd`, `Ord`, `Hash`, and `serde::Serialize`.
+///
+/// Not safe: `Default`, `serde::Deserialize` on its own, and any other derive
+/// that builds the struct field by field. They skip `new` and can produce a value
+/// the validator rejects. To deserialize, add `#[serde(try_from = "T")]`, which
+/// sends every value through the generated `TryFrom<T>` and so through `new`:
+///
+/// ```rust,ignore
+/// #[derive(Validated, serde::Serialize, serde::Deserialize)]
+/// #[serde(try_from = "String", into = "String")]
+/// #[valid(And<Trimmed, LenRange<3, 16>>)]
+/// pub struct Username(String);
+///
+/// impl From<Username> for String {
+///     fn from(u: Username) -> String {
+///         u.into_inner()
+///     }
+/// }
+/// ```
+///
+/// For a default value, write `impl Default` by hand and build it with `new`.
+///
+/// # Interior mutability
+///
+/// The rule is checked once, in `new`. If the field type allows mutation through
+/// `&T` (`Cell`, `RefCell`, atomics, `Mutex`), the value can change after
+/// validation; see [`Refined`] for the same note.
+///
+/// # Renamed or re-exported `type-lib`
+///
+/// The generated code names `::type_lib` by default. When the crate is renamed in
+/// `Cargo.toml` or reached through a re-export, pass the path with
+/// `#[valid(V, crate = path)]`:
+///
+/// ```rust
+/// // A suite crate that re-exports type-lib under another name.
+/// mod suite {
+///     pub mod types {
+///         pub use type_lib::*;
+///     }
+/// }
+///
+/// use type_lib::rules::NonEmpty;
+/// use type_lib::Validated;
+///
+/// #[derive(Validated)]
+/// #[valid(NonEmpty, crate = suite::types)]
+/// pub struct Tag(&'static str);
+///
+/// assert!(Tag::new("a").is_ok());
+/// ```
 ///
 /// # Examples
 ///

@@ -4,8 +4,9 @@
 //! most common invariants, grouped by what they constrain:
 //!
 //! - [length] — `NonEmpty`, `MinLen`, `MaxLen`, `LenRange`
-//! - [numeric] — `Positive`, `NonNegative`, `Negative`, `NonPositive`, `InRange`
-//! - [string] — `Ascii`, `Alphanumeric`, `Trimmed`
+//! - [numeric] — `Positive`, `NonNegative`, `Negative`, `NonPositive`, `InRange`,
+//!   `Finite`
+//! - [string] — `Ascii`, `Alphanumeric`, `AsciiAlphanumeric`, `Trimmed`
 //!
 //! Every built-in rule reports failures as [`ValidationError`](crate::ValidationError),
 //! so they share one error type and compose freely with the
@@ -30,5 +31,5 @@ pub mod numeric;
 pub mod string;
 
 pub use length::{HasLength, LenRange, MaxLen, MinLen, NonEmpty};
-pub use numeric::{InRange, Negative, NonNegative, NonPositive, Positive};
-pub use string::{Alphanumeric, Ascii, Trimmed};
+pub use numeric::{Finite, InRange, Negative, NonNegative, NonPositive, Positive};
+pub use string::{Alphanumeric, Ascii, AsciiAlphanumeric, Trimmed};

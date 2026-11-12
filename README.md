@@ -47,12 +47,13 @@ own error type through `Validator::Error`.
   and stores nothing extra. The validated type is the same size as the raw one.
 - **Built-in rules** — ready-made validators for length
   ([`NonEmpty`](docs/API.md#length-rules), `MinLen`, `MaxLen`, `LenRange`), numbers
-  (`Positive`, `InRange`, …), and string content (`Ascii`, `Alphanumeric`,
-  `Trimmed`).
+  (`Positive`, `InRange`, `Finite`, …), and string content (`Ascii`,
+  `Alphanumeric`, `AsciiAlphanumeric`, `Trimmed`).
 - **Composition** — combine rules at the type level with
   [`And`](docs/API.md#combinators), `Or`, and `Not`; the result is itself a rule.
-- **Derive macro** — `#[derive(Validated)]` (the `derive` feature) turns a newtype
-  into a named domain type with a checked constructor.
+- **Derive macro**: `#[derive(Validated)]` (the `derive` feature) turns a newtype
+  with a private field into a named domain type with a checked constructor and a
+  `TryFrom` impl, so `#[serde(try_from = "T")]` validates on deserialize.
 - **Reusable, type-level rules** — write a `Validator` once and apply it to any
   value type through the type system.
 - **Tamper-proof by construction** — `Refined` exposes no `&mut` to its inner
@@ -88,7 +89,7 @@ For the complete reference with examples, see [docs/API.md](docs/API.md).
 - [`ValidationError`](docs/API.md#validationerror) — ready-made `no_std` error
 - [Built-in rules](docs/API.md#built-in-rules) — length, numeric, and string rules
 - [Combinators](docs/API.md#combinators) — `And`, `Or`, `Not`
-- [`Validated`](docs/API.md#validated-derive) — `#[derive]` for validated newtypes (`derive` feature)
+- [`Validated`](docs/API.md#validated-derive-macro) — `#[derive]` for validated newtypes (`derive` feature)
 - [`prelude`](docs/API.md#prelude) — convenient re-exports
 - [`VERSION`](docs/API.md#version) — compile-time crate version
 
@@ -102,16 +103,16 @@ Runnable demos live in [`examples/`](examples): `quick_start`, `built_in_rules`,
 
 ```toml
 [dependencies]
-type-lib = "1.0.0"
+type-lib = "1.1.0"
 
 # with the derive macro
-type-lib = { version = "1.0.0", features = ["derive"] }
+type-lib = { version = "1.1.0", features = ["derive"] }
 
 # no_std build (core API + borrowed-value rules)
-type-lib = { version = "1.0.0", default-features = false }
+type-lib = { version = "1.1.0", default-features = false }
 
 # no_std + owned-type rules (String / Vec)
-type-lib = { version = "1.0.0", default-features = false, features = ["alloc"] }
+type-lib = { version = "1.1.0", default-features = false, features = ["alloc"] }
 ```
 
 MSRV: Rust 1.75.
@@ -151,6 +152,11 @@ pub struct Username(String);
 let user = Username::new("alice".to_owned());
 assert!(user.is_ok());
 ```
+
+Keep the field private (the derive refuses `pub` fields), and do not derive
+`Default` or `Deserialize` next to it: both build the struct without calling
+`new`. To deserialize, use `#[serde(try_from = "String")]`. See
+[docs/API.md](docs/API.md#validated-derive-macro) for the list of safe derives.
 
 Need a rule the built-ins don't cover? Implement [`Validator`](docs/API.md#validator)
 on a marker type — see the [`custom_rule`](examples/custom_rule.rs) example.

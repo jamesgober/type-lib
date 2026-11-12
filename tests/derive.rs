@@ -49,3 +49,57 @@ fn standard_derives_coexist() {
     assert_eq!(a, b);
     assert_eq!(format!("{b:?}"), "Username(\"bob\")");
 }
+
+#[test]
+fn try_from_runs_the_validator() {
+    let ok = Percent::try_from(42).expect("in range");
+    assert_eq!(*ok, 42);
+    let err = Percent::try_from(150).unwrap_err();
+    assert_eq!(err.code(), "in_range");
+
+    let user: Result<Username, _> = "  padded  ".to_owned().try_into();
+    assert!(user.is_err());
+}
+
+/// A wire type that validates on deserialize through the generated `TryFrom`.
+#[derive(Validated, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "String", into = "String")]
+#[valid(And<Trimmed, LenRange<3, 16>>)]
+struct WireName(String);
+
+impl From<WireName> for String {
+    fn from(name: WireName) -> String {
+        name.into_inner()
+    }
+}
+
+#[test]
+fn serde_try_from_validates_on_deserialize() {
+    let good: WireName = serde_json::from_str("\"alice\"").expect("valid name");
+    assert_eq!(good.get(), "alice");
+    assert_eq!(
+        serde_json::to_string(&good).expect("serialize"),
+        "\"alice\""
+    );
+
+    let err = serde_json::from_str::<WireName>("\"   padded and far too long   \"").unwrap_err();
+    assert!(err.to_string().contains("trimmed"), "{err}");
+    assert!(serde_json::from_str::<WireName>("\"ab\"").is_err());
+}
+
+mod renamed {
+    // The same crate reached through another path, as a suite re-export would.
+    pub mod tl {
+        pub use type_lib::*;
+    }
+}
+
+#[derive(Validated)]
+#[valid(crate = renamed::tl, InRange<1, 65535>)]
+struct Port(u16);
+
+#[test]
+fn crate_option_sets_the_type_lib_path() {
+    assert!(Port::new(8080).is_ok());
+    assert!(Port::new(0).is_err());
+}

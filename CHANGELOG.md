@@ -27,6 +27,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2026-11-12
+
+Fixes from an independent review of 1.0.0. `type-lib` and `type-lib-derive` are
+both released at 1.1.0; `type-lib` requires `type-lib-derive` 1.1.0.
+
+### Security
+
+- `#[derive(Validated)]` now rejects a field that is not private (`pub`,
+  `pub(crate)`, `pub(super)`, `pub(in ...)`) with a compile error on the field.
+  A visible field let any code build the type, or change the value, without
+  calling `new`, so the invariant did not hold. A private field or `pub(self)`
+  is accepted as before. This only fails to compile for types that were already
+  open to unvalidated construction.
+- The docs no longer say to add other derives "as usual". They now list the
+  derives that are safe next to `Validated` (`Debug`, `Clone`, `Copy`,
+  `PartialEq`, `Eq`, `PartialOrd`, `Ord`, `Hash`, `serde::Serialize`) and warn
+  that `Default` and `serde::Deserialize` build the struct without `new`.
+
+### Added
+
+- `#[derive(Validated)]` generates `impl TryFrom<T>` that calls `new`. With it,
+  `#[serde(try_from = "T")]` on a derived newtype validates every deserialized
+  value, and `value.try_into()` works.
+- `#[valid(V, crate = path)]` sets the path the generated code uses for
+  `type-lib`, for a renamed dependency or a re-export through a suite crate. The
+  default stays `::type_lib`.
+- `rules::Finite` for `f32` and `f64`: rejects NaN and both infinities. Error
+  code `"finite"`.
+- `rules::AsciiAlphanumeric`: ASCII letters and digits only, for identifiers
+  where Unicode lookalikes must not pass. Error code `"ascii_alphanumeric"`.
+- `HasLength::length_at_most(limit)`, a provided method that returns the exact
+  length when it is at most `limit` and a larger value otherwise. The default
+  calls `length`, so existing impls are unaffected.
+
+### Changed
+
+- `InRange<MIN, MAX>` and `LenRange<MIN, MAX>` with `MIN > MAX` now fail to build
+  where the rule is used. Before, they compiled into a rule that rejected every
+  value. A range with `MIN == MAX` is still allowed.
+- `NonEmpty`, `MinLen`, `MaxLen`, and `LenRange` call `length_at_most`, so for
+  strings they no longer count every char of a long input. A string with more
+  than `4 * MAX` bytes is rejected from its byte length alone. Verdicts and error
+  codes are unchanged.
+
+### Documentation
+
+- `Refined` and the derive document their one precondition on `T`: the rule is
+  checked once, so a `T` that can change through `&T` (`Cell`, `RefCell`,
+  atomics, `Mutex`) can leave the invariant after construction.
+- `Refined` documents that it has no `Deserialize` impl and how to deserialize a
+  validated value instead.
+- The numeric rules document the floating-point edge cases: sign rules reject
+  NaN, `Positive` accepts infinity, and `Not<Positive>` accepts NaN.
+- `Alphanumeric` documents that it accepts Unicode lookalikes and points to
+  `AsciiAlphanumeric`.
+- Fixed the `Validated` links into `docs/API.md`, which pointed at a heading
+  anchor that does not exist.
+
+---
+
 ## [1.0.0] - 2026-05-27
 
 The first stable release. The public API is frozen under SemVer.

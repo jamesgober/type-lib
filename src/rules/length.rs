@@ -27,11 +27,56 @@ use crate::{ValidationError, Validator};
 pub trait HasLength {
     /// Returns the length of the value: chars for strings, elements otherwise.
     fn length(&self) -> usize;
+
+    /// Returns the length if it is at most `limit`, or some value greater than
+    /// `limit` otherwise.
+    ///
+    /// The length rules call this instead of [`length`](HasLength::length), so
+    /// a type whose length is expensive to count can stop early. Strings use it
+    /// to avoid walking a long input: a string longer than `4 * limit` bytes has
+    /// more than `limit` chars, and a shorter one is counted only up to
+    /// `limit + 1` chars.
+    ///
+    /// The default calls [`length`](HasLength::length), which is always
+    /// correct. An override must return the exact length whenever that length is
+    /// at most `limit`, and a value greater than `limit` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use type_lib::rules::HasLength;
+    ///
+    /// assert_eq!("héllo".length_at_most(10), 5);
+    /// assert!("héllo".length_at_most(3) > 3);
+    /// ```
+    fn length_at_most(&self, limit: usize) -> usize {
+        let _ = limit;
+        self.length()
+    }
+}
+
+/// Char count of `s`, exact up to `limit`, and greater than `limit` otherwise.
+fn str_length_at_most(s: &str, limit: usize) -> usize {
+    let bytes = s.len();
+    if bytes <= limit {
+        // At most `bytes` chars, so the exact count is within the limit.
+        s.chars().count()
+    } else if bytes / 4 > limit {
+        // Every char is at most 4 bytes, so there are at least `bytes / 4`
+        // chars, which is more than `limit`.
+        limit.saturating_add(1)
+    } else {
+        s.chars().take(limit.saturating_add(1)).count()
+    }
 }
 
 impl HasLength for str {
     fn length(&self) -> usize {
         self.chars().count()
+    }
+
+    fn length_at_most(&self, limit: usize) -> usize {
+        str_length_at_most(self, limit)
     }
 }
 
@@ -45,12 +90,20 @@ impl<U: HasLength + ?Sized> HasLength for &U {
     fn length(&self) -> usize {
         U::length(self)
     }
+
+    fn length_at_most(&self, limit: usize) -> usize {
+        U::length_at_most(self, limit)
+    }
 }
 
 #[cfg(feature = "alloc")]
 impl HasLength for alloc::string::String {
     fn length(&self) -> usize {
         self.as_str().chars().count()
+    }
+
+    fn length_at_most(&self, limit: usize) -> usize {
+        str_length_at_most(self.as_str(), limit)
     }
 }
 
@@ -79,7 +132,7 @@ impl<T: HasLength + ?Sized> Validator<T> for NonEmpty {
     type Error = ValidationError;
 
     fn validate(value: &T) -> Result<(), Self::Error> {
-        if value.length() > 0 {
+        if value.length_at_most(0) > 0 {
             Ok(())
         } else {
             Err(ValidationError::new("non_empty", "value must not be empty"))
@@ -104,7 +157,7 @@ impl<const MIN: usize, T: HasLength + ?Sized> Validator<T> for MinLen<MIN> {
     type Error = ValidationError;
 
     fn validate(value: &T) -> Result<(), Self::Error> {
-        if value.length() >= MIN {
+        if value.length_at_most(MIN) >= MIN {
             Ok(())
         } else {
             Err(ValidationError::new("min_len", "value is too short"))
@@ -129,7 +182,7 @@ impl<const MAX: usize, T: HasLength + ?Sized> Validator<T> for MaxLen<MAX> {
     type Error = ValidationError;
 
     fn validate(value: &T) -> Result<(), Self::Error> {
-        if value.length() <= MAX {
+        if value.length_at_most(MAX) <= MAX {
             Ok(())
         } else {
             Err(ValidationError::new("max_len", "value is too long"))
@@ -150,7 +203,24 @@ impl<const MAX: usize, T: HasLength + ?Sized> Validator<T> for MaxLen<MAX> {
 /// assert!(LenRange::<3, 16>::validate("ab").is_err());
 /// assert!(LenRange::<3, 16>::validate("this-name-is-far-too-long").is_err());
 /// ```
+///
+/// `MIN` must not be greater than `MAX`. An inverted range such as
+/// `LenRange<16, 3>` fails to build when the rule is used, instead of compiling
+/// into a type that rejects every value:
+///
+/// ```compile_fail
+/// use type_lib::rules::LenRange;
+/// use type_lib::Refined;
+///
+/// let _ = Refined::<&str, LenRange<16, 3>>::new("alice"); // error: MIN > MAX
+/// ```
 pub struct LenRange<const MIN: usize, const MAX: usize>;
+
+impl<const MIN: usize, const MAX: usize> LenRange<MIN, MAX> {
+    /// Evaluated when `validate` is instantiated; stops the build if the bounds
+    /// are inverted.
+    const BOUNDS_ORDERED: () = assert!(MIN <= MAX, "LenRange<MIN, MAX> requires MIN <= MAX");
+}
 
 impl<const MIN: usize, const MAX: usize, T: HasLength + ?Sized> Validator<T>
     for LenRange<MIN, MAX>
@@ -158,7 +228,11 @@ impl<const MIN: usize, const MAX: usize, T: HasLength + ?Sized> Validator<T>
     type Error = ValidationError;
 
     fn validate(value: &T) -> Result<(), Self::Error> {
-        let len = value.length();
+        // Forces the bound check; older clippy flags `let ()` here.
+        #[allow(clippy::let_unit_value)]
+        let () = Self::BOUNDS_ORDERED;
+        // Exact when `len <= MAX`; otherwise some value above `MAX`.
+        let len = value.length_at_most(MAX);
         if len >= MIN && len <= MAX {
             Ok(())
         } else {
@@ -184,6 +258,58 @@ mod tests {
         // The blanket impl for references lets a rule see through one `&`.
         let slice: &[u8] = b"abc";
         assert_eq!(slice.length(), 3);
+    }
+
+    #[test]
+    fn str_length_at_most_is_exact_up_to_the_limit() {
+        // 2-byte, 3-byte, and 4-byte chars around every branch of the helper.
+        for s in [
+            "",
+            "a",
+            "abc",
+            "h\u{e9}llo",
+            "\u{20ac}\u{20ac}\u{20ac}",
+            "\u{1f600}\u{1f600}x",
+        ] {
+            let exact = s.chars().count();
+            for limit in 0..12 {
+                let got = s.length_at_most(limit);
+                if exact <= limit {
+                    assert_eq!(got, exact, "{s:?} limit {limit}");
+                } else {
+                    assert!(got > limit, "{s:?} limit {limit} got {got}");
+                }
+            }
+        }
+        assert_eq!("abc".length_at_most(usize::MAX), 3);
+    }
+
+    /// A container whose full length must never be asked for: the length rules
+    /// must go through `length_at_most`.
+    struct Endless;
+
+    impl HasLength for Endless {
+        fn length(&self) -> usize {
+            panic!("the full length was counted");
+        }
+
+        fn length_at_most(&self, limit: usize) -> usize {
+            limit.saturating_add(1)
+        }
+    }
+
+    #[test]
+    fn length_rules_stop_at_the_bound() {
+        assert!(NonEmpty::validate(&Endless).is_ok());
+        assert!(MinLen::<4>::validate(&Endless).is_ok());
+        assert!(MaxLen::<4>::validate(&Endless).is_err());
+        assert!(LenRange::<1, 4>::validate(&Endless).is_err());
+    }
+
+    #[test]
+    fn len_range_single_value_range_is_allowed() {
+        assert!(LenRange::<2, 2>::validate("ab").is_ok());
+        assert!(LenRange::<2, 2>::validate("abc").is_err());
     }
 
     #[test]

@@ -1,6 +1,6 @@
 ﻿[package]
 name = "type-lib"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
 rust-version = "1.75"
 readme = "README.md"
@@ -52,7 +52,7 @@ alloc = []
 derive = ["dep:type-lib-derive"]
 
 [dependencies]
-type-lib-derive = { version = "1.0.0", path = "derive", optional = true }
+type-lib-derive = { version = "1.1.0", path = "derive", optional = true }
 
 [dev-dependencies]
 # Property-based tests for rule and combinator invariants.
@@ -60,6 +60,9 @@ proptest = "1"
 # Microbenchmarks for the validation hot path. Default features are disabled to
 # keep the dev-dependency tree (and MSRV surface) small.
 criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+# Tests that `#[serde(try_from = "T")]` on a derived newtype validates input.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # The committed `Cargo.lock` pins this dev-dependency tree to versions that still
 # build on the MSRV (Rust 1.75): proptest 1.4, criterion's clap 4.5, tempfile 3.14,

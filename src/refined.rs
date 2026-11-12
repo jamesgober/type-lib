@@ -14,7 +14,8 @@ use crate::Validator;
 /// **once**, when the wrapper is constructed, and the type then proves the
 /// invariant for the rest of the value's life. Code that receives a
 /// `Refined<T, V>` never has to re-validate, because a `Refined` that violates
-/// `V` cannot be constructed through safe code.
+/// `V` cannot be constructed through safe code (see [Interior
+/// mutability](#interior-mutability) for the one precondition on `T`).
 ///
 /// The wrapper is `#[repr(transparent)]` and stores only the value plus a
 /// zero-sized marker, so it has the exact same size and layout as `T`. The
@@ -25,6 +26,21 @@ use crate::Validator;
 /// type's back. To change a refined value, build a new one with [`Refined::new`]
 /// (or recover the inner value with [`Refined::into_inner`], change it, and
 /// re-wrap it).
+///
+/// # Interior mutability
+///
+/// `V` is checked once, in [`Refined::new`]. [`Deref`] hands out `&T`, so if `T`
+/// allows mutation through a shared reference (`Cell`, `RefCell`, atomics,
+/// `Mutex`, or a type that holds one), the value can change after validation and
+/// the invariant no longer holds. Wrap only types that cannot change through
+/// `&T` when you rely on the guarantee.
+///
+/// # Serde
+///
+/// `Refined` does not implement `Deserialize`. To read a validated value from the
+/// wire, use a [`Validated`](https://docs.rs/type-lib/latest/type_lib/derive.Validated.html)
+/// newtype with `#[serde(try_from = "T")]`, or deserialize `T` and call
+/// [`Refined::new`].
 ///
 /// # Examples
 ///
